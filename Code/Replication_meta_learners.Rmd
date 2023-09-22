@@ -3,7 +3,7 @@ title: "Replication of Archarky (2023)"
 author: "Maren Baumgärtner"
 output: html_notebook
 ---
-This notebook replicates the results of Table 2 and Table 6 of the paper "Comparison of meta-learners for estimating multi-valued treatment heterogeneous effects" from Acharky (2023) using their code and adding a plot to vizualize the results.
+This notebook replicates the results of Table 2 and Table 6 of the paper "Comparison of meta-learners for estimating multi-valued treatment heterogeneous effects" from Acharky (2023) using their code and adding a plot to visualize the results.
 ```{r}
 # Import libraries and dataset
 library(dplyr)
@@ -89,8 +89,6 @@ mPEHE_T
 sdPEHE_T = sdPEHE(PEHE_T)
 sdPEHE_T
 
-sdPEHE_T = sdPEHE(PEHE_T)
-sdPEHE_T
 ```
 
 ### S_learner 
@@ -293,10 +291,21 @@ Xgb_results
 
 
 ### Causal forest
-```{}
-CF.Fit <- causal_forest(as.data.frame(X), Y, W, tune.parameters = "all")
+```{r}
+CF.Fit <- multi_arm_causal_forest(as.data.frame(X), Y, as.factor(W))
 
-CF_hat <- 
+CF_hat <- as.matrix(predict(CF.Fit)$predictions[, , 1])
+
+PEHE_CF = c()
+for(k in 2:K){
+  PEHE_CF= c(PEHE_CF, PEHE(CF_hat[,k-1], X, W.levels[k]))
+}
+
+mPEHE_CF = mPEHE(PEHE_CF)
+mPEHE_CF
+
+sdPEHE_CF = sdPEHE(PEHE_CF)
+sdPEHE_CF
 ```
 
 ## Visualization of PEHE
@@ -304,12 +313,12 @@ CF_hat <-
 ```{r}
 #PEHEs$mean <- cbind(mPEHE_T, mPEHE_S)#, mPEHE_nvX, mPEHE_M, mPEHE_DR, mPEHE_X, mPEHE_R)
 
-PEHEs <- as.tibble(c(mPEHE_T, mPEHE_S, mPEHE_nvX, mPEHE_M, mPEHE_DRT, mPEHE_XT, mPEHE_DR, mPEHE_X, mPEHE_R)) %>% rename(mean=value)
-PEHEs$sd <- c(sdPEHE_T, sdPEHE_S, sdPEHE_nvX, sdPEHE_M, sdPEHE_DRT, sdPEHE_XT, sdPEHE_DR, sdPEHE_X, sdPEHE_R)
+PEHEs <- as.tibble(c(mPEHE_T, mPEHE_S, mPEHE_nvX, mPEHE_M, mPEHE_DRT, mPEHE_XT, mPEHE_DR, mPEHE_X, mPEHE_R, mPEHE_CF)) %>% rename(mean=value)
+PEHEs$sd <- c(sdPEHE_T, sdPEHE_S, sdPEHE_nvX, sdPEHE_M, sdPEHE_DRT, sdPEHE_XT, sdPEHE_DR, sdPEHE_X, sdPEHE_R, sdPEHE_CF)
 PEHEs$rowname <- c("T-Learner", "S-Learner", "naive X-Learner", "M-Learner", 
                    "DR-Learner w/ T-learning ", "X-Learner w/ T-learning ",
                    "DR-Learner w/ S-learning ", "X-Learner w/ S-learning ",
-                   "R-Learner")
+                   "R-Learner", "Causal Forest")
 ggplot(PEHEs, aes(x = rowname, y = mean, ymin = mean - 1.96*sd, ymax = mean + 1.96*sd)) +
   geom_errorbar(width = 0.2) +
   geom_point(size = 1.5) +
@@ -322,19 +331,19 @@ ggplot(PEHEs, aes(x = rowname, y = mean, ymin = mean - 1.96*sd, ymax = mean + 1.
 
 ```{r}
 # Exclude R-Learner and M-Learner
-PEHEs_xgb <- as.tibble(c(mPEHE_T, mPEHE_S, mPEHE_nvX, mPEHE_DRT, mPEHE_XT, mPEHE_DR, mPEHE_X)) %>% rename(mean=value)
-PEHEs_xgb$sd <- c(sdPEHE_T, sdPEHE_S, sdPEHE_nvX, sdPEHE_DRT, sdPEHE_XT, sdPEHE_DR, sdPEHE_X)
+PEHEs_xgb <- as.tibble(c(mPEHE_T, mPEHE_S, mPEHE_nvX, mPEHE_DRT, mPEHE_XT, mPEHE_DR, mPEHE_X, mPEHE_CF)) %>% rename(mean=value)
+PEHEs_xgb$sd <- c(sdPEHE_T, sdPEHE_S, sdPEHE_nvX, sdPEHE_DRT, sdPEHE_XT, sdPEHE_DR, sdPEHE_X, sdPEHE_CF)
 PEHEs_xgb$rowname <- c("T-Learner", "S-Learner", "naive X-Learner", 
                    "DR-Learner w/ T-learning ", "X-Learner w/ T-learning ",
-                   "DR-Learner w/ S-learning ", "X-Learner w/ S-learning "
-                   )
+                   "DR-Learner w/ S-learning ", "X-Learner w/ S-learning ",
+                   "Causal Forest")
 
 ggplot(PEHEs_xgb, aes(x = rowname, y = mean, ymin = mean - 1.96*sd, ymax = mean + 1.96*sd)) +
   geom_errorbar(width = 0.2) +
   geom_point(size = 1.5) +
   xlab("Meta-Learner") +
   ylab("mPEHE") +
-  ggtitle('') +
+  ggtitle('XGBoost') +
   theme_bw() + theme (axis.text.x = element_text (angle = 90)) 
   
 ```
@@ -548,19 +557,19 @@ sdPEHE_R
 
 ```{r}
 # Exclude R-Learner and M-Learner
-PEHEs_rf <- as.tibble(c(mPEHE_T, mPEHE_S, mPEHE_nvX, mPEHE_DRT, mPEHE_XT, mPEHE_DR, mPEHE_X)) %>% rename(mean=value)
-PEHEs_rf$sd <- c(sdPEHE_T, sdPEHE_S, sdPEHE_nvX, sdPEHE_DRT, sdPEHE_XT, sdPEHE_DR, sdPEHE_X)
+PEHEs_rf <- as.tibble(c(mPEHE_T, mPEHE_S, mPEHE_nvX, mPEHE_DRT, mPEHE_XT, mPEHE_DR, mPEHE_X, mPEHE_CF)) %>% rename(mean=value)
+PEHEs_rf$sd <- c(sdPEHE_T, sdPEHE_S, sdPEHE_nvX, sdPEHE_DRT, sdPEHE_XT, sdPEHE_DR, sdPEHE_X, sdPEHE_CF)
 PEHEs_rf$rowname <- c("T-Learner", "S-Learner", "naive X-Learner", 
                    "DR-Learner w/ T-learning ", "X-Learner w/ T-learning ",
-                   "DR-Learner w/ S-learning ", "X-Learner w/ S-learning "
-                   )
+                   "DR-Learner w/ S-learning ", "X-Learner w/ S-learning ",
+                   "Causal Forest")
 
 ggplot(PEHEs_rf, aes(x = rowname, y = mean, ymin = mean - 1.96*sd, ymax = mean + 1.96*sd)) +
   geom_errorbar(width = 0.2) +
   geom_point(size = 1.5) +
   xlab("Meta-Learner") +
   ylab("mPEHE") +
-  ggtitle('') +
+  ggtitle('Random Forest') +
   theme_bw() + theme (axis.text.x = element_text (angle = 90)) 
   
 ```
@@ -771,12 +780,12 @@ sdPEHE_R
 
 ```{r}
 # Exclude R-Learner and M-Learner
-PEHEs_lm <- as.tibble(c(mPEHE_T, mPEHE_S, mPEHE_nvX, mPEHE_DRT, mPEHE_XT, mPEHE_DR, mPEHE_X)) %>% rename(mean=value)
-PEHEs_lm$sd <- c(sdPEHE_T, sdPEHE_S, sdPEHE_nvX, sdPEHE_DRT, sdPEHE_XT, sdPEHE_DR, sdPEHE_X)
+PEHEs_lm <- as.tibble(c(mPEHE_T, mPEHE_S, mPEHE_nvX, mPEHE_DRT, mPEHE_XT, mPEHE_DR, mPEHE_X, mPEHE_CF)) %>% rename(mean=value)
+PEHEs_lm$sd <- c(sdPEHE_T, sdPEHE_S, sdPEHE_nvX, sdPEHE_DRT, sdPEHE_XT, sdPEHE_DR, sdPEHE_X, sdPEHE_CF)
 PEHEs_lm$rowname <- c("T-Learner", "S-Learner", "naive X-Learner", 
                    "DR-Learner w/ T-learning ", "X-Learner w/ T-learning ",
-                   "DR-Learner w/ S-learning ", "X-Learner w/ S-learning "
-                   )
+                   "DR-Learner w/ S-learning ", "X-Learner w/ S-learning ",
+                   "Causal Forest")
 
 ggplot(PEHEs_lm, aes(x = rowname, y = mean, ymin = mean - 1.96*sd, ymax = mean + 1.96*sd)) +
   geom_errorbar(width = 0.2) +
