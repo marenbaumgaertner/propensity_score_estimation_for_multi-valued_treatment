@@ -561,7 +561,51 @@ predict.adaboost_fit = function(adaboost_fit, x,y,xnew=NULL,weights=FALSE){
 model = adaboost_fit(x = as.matrix(X_training), y = as.factor(W_training$W))
 preds = predict.boosting_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
 
+# @Maren: kmax depedent on # classes?
+knn_fit = function(x,y,args=list(kmax=10)){
+  data = as.data.frame(cbind(y, x))
+  data$y <- as.factor(data$y)
+  model = do.call( train.kknn ,c(list(formula = y ~ ., data = data), args))
+  model
+}
 
+predict.knn_fit = function(knn_fit, x,y,xnew=NULL,weights=FALSE){
+  if (is.null(xnew)) xnew = x
+  if (weights==TRUE) {
+    w = NULL
+  }
+  else w = NULL
+  
+  fit = predict(knn_fit, newdata = xnew, type='prob')
+  list("prediction"=fit,"weights"=w)
+}
+
+
+model = knn_fit(x = as.matrix(X_training), y = as.factor(W_training$W), args = list(kmax=20))
+preds = predict.knn_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
+
+
+
+knn_radius_fit = function(x,y,args=list(distance=10)){
+  data = as.data.frame(cbind(y, x))
+  data$y <- as.factor(data$y)
+  model = do.call( train.kknn ,c(list(formula = y ~ ., data = data), args))
+  model
+}
+
+predict.knn_radius_fit = function(knn_radius_fit, x,y,xnew=NULL,weights=FALSE){
+  if (is.null(xnew)) xnew = x
+  if (weights==TRUE) {
+    w = NULL
+  }
+  else w = NULL
+  
+  fit = predict(knn_fit, newdata = xnew, type='prob')
+  list("prediction"=fit,"weights"=w)
+}
+
+model = knn_radius_fit(x = as.matrix(X_training), y = as.factor(W_training$W), args = list(distance=5))
+preds = predict.knn_radius_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
 
 
 
