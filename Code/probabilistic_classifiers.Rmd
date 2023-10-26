@@ -1,0 +1,180 @@
+---
+title: "Probabilistic Classifiers"
+author: "Maren Baumgärtner"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+    code_folding: show
+---
+
+```{r, message=FALSE, echo=FALSE}
+# Import libraries and dataset
+library(knitr)
+library(dplyr)
+library(reshape2)
+library(randomForest)
+library(ggplot2)
+library(caTools)
+library(mlogit)
+library(nnet)
+library(caret)
+library(glmnet)
+library(naivebayes)
+library(rpart)
+library(randomForest)
+library(MASS)
+library(FNN)
+library(e1071)
+library(igraph)
+library(caret)
+library(sparklyr)
+library(RSSL)
+library(sgd)
+library(MASS)
+library(hdm)
+library(predtools)
+library(xgboost)
+library(adabag)
+library(rpart)
+library(grf)
+library(ada)
+library(fastAdaboost)
+library(plyr)
+library(causalDML)
+library(binda)
+library(kknn)
+```
+
+```{r}
+source("ml_wrapper.R")
+source("eval_functions.R")
+
+set.seed(42)
+options(scipen= 999)
+```
+
+
+# Create binary data
+```{r}
+# Set parameters
+n = 4000
+p = 15
+
+# Draw sample
+X = matrix(runif(n*p,-pi,pi),ncol=p)
+#e = function(x){2/3} # balanced
+e = function(x){pnorm(sin(x))}
+m0 = function(x){sin(x)}
+tau = function(x){1*(x>-0.5*pi)}
+#m1 = function(x){m0(x) + tau(x)}
+W = rbinom(n,1,e(X))
+Y = m0(X[,1]) + W*tau(X[,1]) + rnorm(n,0,1/2)
+
+
+W.levels <- sort(unique(W))
+K <- length(W.levels)
+
+
+#dataset_f <- data.frame(W = as.factor(W),X) # with W as factor
+dataset <- data.frame(W=W,X)
+
+split_indices <- sample.split(dataset$W, SplitRatio = 0.8)
+training_data <- dataset[split_indices, ]
+test_data <- dataset[!split_indices, ]
+
+#training_data_f <- dataset_f[split_indices, ]
+#test_data_f <- dataset_f[!split_indices, ]
+
+W_training <- as.matrix(data.frame(W = training_data$W))
+X_training <- as.matrix(data.frame(X[split_indices, ]))
+W_test <-     as.matrix(data.frame(W = test_data$W))
+X_test <-     as.matrix(data.frame(X[!split_indices, ]))
+```
+
+# Train classifiers
+```{r}
+# List of classifiers
+classifiers <- c(
+  "adaboost", "bagging", "boosting", "forest_grf", "knn",
+  "knn_radius", "lda", "logit",
+  "mlpc", "nb_bernulli", "nb_gaussian",
+  "probability_forest", "qda", "svm", "xgboost"
+)
+
+# Initialize a list to store results
+results <- list()
+#classifier <- classifiers[14]
+#
+
+# Loop through classifiers
+for (classifier in classifiers) {
+  print(classifier)
+  # Create model
+  model <- do.call(paste0(classifier, "_fit"), list(x=X_training, y=W_training))
+  
+  # Make predictions
+  predictions <- do.call(paste0("predict.", classifier,  "_fit"), 
+                         list(model, X_test, W_test, xnew = X_test))$prediction
+  
+  if (classifier == "adaboost"){
+    predictions = predictions$prob
+    predictions = predictions[,2] %>% as_tibble()
+  }
+  if (classifier == "probability_forest"){
+    predictions = predictions$predictions
+    predictions = predictions[,2] %>% as_tibble()
+  }
+  if (classifier %in% c("forest_grf", "xgboost")){
+    predictions = predictions %>% as_tibble()
+  }
+  
+  if (ncol(predictions) == 2){
+    predictions = predictions[,2] %>% as_tibble()
+  }
+  # Calculate Brier score
+  bs <- brier_score(predictions, W_test)
+  
+  # Make calibration plot
+  plot_filename <- paste(classifier, ".png", sep = "")
+  make_calibtation_plot(predictions, as_tibble(W_test), classifier)
+  
+  # Store results
+  results[[classifier]] <- list(predictions = predictions, brier_score = bs)
+}
+
+
+```
+# Evaluation
+
+## Brier Score
+```{r, message=FALSE, echo=FALSE}
+brier_scores <- sapply(results, function(result) result$brier_score)
+
+# Create a data frame with classifier names and Brier scores
+results_df <- data.frame(Classifier = classifier_names, Brier_Score = brier_scores) %>% arrange(Brier_Score)
+
+# Display the table using kable
+kable(results_df, caption = "Brier Scores for Classifiers")
+```
+
+## Calibration plots
+```{r}
+make_calibtation_plot(results$adaboost$predictions, as_tibble(W_test), "adaboost")
+make_calibtation_plot(results$bagging$predictions, as_tibble(W_test), "bagging")
+make_calibtation_plot(results$boosting$predictions, as_tibble(W_test), "boosting")
+make_calibtation_plot(results$forest_grf$predictions, as_tibble(W_test), "Random Forest")
+make_calibtation_plot(results$knn$predictions, as_tibble(W_test), "KNN")
+make_calibtation_plot(results$knn_radius$predictions, as_tibble(W_test), "KNN Radius")
+make_calibtation_plot(results$lda$predictions, as_tibble(W_test), "LDA")
+make_calibtation_plot(results$logit$predictions, as_tibble(W_test), "Logistic regression")
+make_calibtation_plot(results$mlpc$predictions, as_tibble(W_test), "MLPC")
+make_calibtation_plot(results$nb_bernulli$predictions, as_tibble(W_test), "Naive Bayes (Bernulli)")
+make_calibtation_plot(results$nb_gaussian$predictions, as_tibble(W_test), "Naive Bayes (Gaussian)")
+make_calibtation_plot(results$probability_forest$predictions, as_tibble(W_test), "Probability Forest")
+make_calibtation_plot(results$qda$predictions, as_tibble(W_test), "QDA")
+make_calibtation_plot(results$svm$predictions, as_tibble(W_test), "SVM")
+make_calibtation_plot(results$xgboost$predictions, as_tibble(W_test), "XGBoost")
+```
+
+

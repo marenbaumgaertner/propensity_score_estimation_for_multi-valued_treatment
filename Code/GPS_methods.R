@@ -20,6 +20,9 @@ library(sparklyr)
 library(RSSL)
 library(sgd)
 library(causalDML)
+library(kknn)
+devtools::install_github("cran/obliqueRF")
+devtools::install_github("cran/bride")
 #source("MetaLearners_tools.R");rm(cl, nc)
 source("eval_functions.R")
 set.seed(42)
@@ -53,7 +56,7 @@ X_training <- data.frame(training_data[ ,1:3])
 W_test <- data.frame(W = test_data$W)
 X_test <- data.frame(test_data[,1:3])
 
-formula <- W ~ X1 + X2
+formula <- W ~ X1 + X2 + X3
 
 
 K_GPS_unif <- function(x){
@@ -82,10 +85,13 @@ e_hat_logit <- matrix(NA, nrow = nrow(test_data), ncol = K)
 # model_logit = mlogit::mlogit(W ~ X, data = training_data) # need the data to be reshaped 
 model_logit <- glmnet::mlogit(formula, data = training_data, model = TRUE) # trace=FALSE?
 model_logit <- glm(formula, data = training_data, model = TRUE, family = "multinomial")
-model_logit <- nnet::multinom(formula, data = training_data, model = TRUE)
 e_hat_logit <- predict(model_logit, newdata = X_test, type = "prob")
 
 bs_logit <- brier_score(e_hat_logit, W_test, binary = FALSE)
+
+# Penalized multinomial regression
+model_logit <- nnet::multinom(formula, data = training_data, model = TRUE)
+e_hat_logit <- predict(model_logit, newdata = X_test, type = 'prob') %>%  as_tibble()
 
 # 2. logistic regression with cross-validation
 e_hat_logit_cv <- matrix(NA, nrow = nrow(test_data), ncol = K)
@@ -124,6 +130,7 @@ all(e_hat_nb_bernulli == e_hat_nb_gaussian)
 # 7. Decision Tree classifier
 model_decision_tree <- rpart(formula, data = training_data, method = "class")
 e_hat_decision_tree <- predict(model_decision_tree, X_test, type = "prob")
+bs_decision_tree <- brier_score(e_hat_decision_tree, W_test, binary = FALSE)
 
 # 8. Extra Tree classifier
 # R package not available, just for binary classification
@@ -156,6 +163,13 @@ outcome<-W_test
 e_hat_rf <- matrix(NA, nrow = nrow(test_data), ncol = K)
 model_rf <- randomForest(y = as.factor(training_data$W), x = X_training)
 e_hat_rf <- predict(model_rf, X_test, type = "prob")
+bs_rf <- brier_score(e_hat_rf, W_test, binary = FALSE)
+
+# Probability forest
+model_pf <- probability_forest(X = as.matrix(X_training), Y = as.factor(W_training$W))
+e_hat_pf <- predict(model_pf, as.matrix(X_test))$predictions
+bs_pf <- brier_score(e_hat_pf, W_test, binary = FALSE)
+
 
 # 10. Label Propagation
 #model_label_prop <- clustee_label_prop()
@@ -204,6 +218,9 @@ model_knn <- FNN::knn(train = as.matrix(X_training), test = as.matrix(X_test), c
 model_knn <- class::knn(train = as.matrix(X_training), test = as.matrix(X_test), cl = training_data$W, prob = TRUE)
 e_hat_knn <- attributes(model_knn)$prob
 
+model_knn <- train.kknn(formula = formula, data = training_data)
+e_hat_knn <- predict(model_knn, test_data)
+
 # 14. Nearest Centroid
 #model_nearest_centriod <-
 #e_hat_nearest_centriod <-
@@ -224,8 +241,12 @@ bs_qda <- brier_score(e_hat_qda, W_test, binary = FALSE)
 
 
 # 18. Multi-layer Perceptron classifier
-model_mlpc <- nnet(x = scale(X_training), y = class.ind(training_data$W), linout = FALSE, size = c(10, 5), softmax = TRUE, maxit = 200)
-e_hat_mlpc <- predict(model_mlpc, X_test)
+model_mlpc <- nnet(x = X_training, y = class.ind(W_training$W), 
+                   linout = FALSE, size = 10, softmax = TRUE, maxit = 100)
+e_hat_mlpc <- predict(model_mlpc, newdata = X_training)
+
+
+
 
 # 19. Stochastic Gradient Descent (SGD)
 model_sgd <- sgd(as.matrix(X_training), W_training, 

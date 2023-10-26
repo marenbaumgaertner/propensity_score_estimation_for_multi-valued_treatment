@@ -45,6 +45,7 @@ brier_score <- function(probabilities, outcome, binary = TRUE){
 make_calibtation_plot <- function(probabilities, true_outcome, method) {
   ## Calibration plot
   #if (ncol(probabilities)>)
+  probabilities <- as_tibble(probabilities)
   calibration_data <- cbind(probabilities, true_outcome)
   colnames(calibration_data) <- c("predicted_probabilities", "actual_outcomes")
   

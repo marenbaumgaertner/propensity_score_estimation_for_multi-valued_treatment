@@ -309,9 +309,9 @@ predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE){
 
 
 
-model = logit_fit(as.matrix(X_training), as.matrix(W_training))
-preds = predict.logit_fit(model, as.matrix(X_training), as.matrix(W_training), xnew=as.matrix(X_test))
-
+#model = logit_fit(as.matrix(X_training), as.matrix(W_training))
+#preds = predict.logit_fit(model, as.matrix(X_training), as.matrix(W_training), xnew=as.matrix(X_test))
+#
 
 
 
@@ -350,11 +350,11 @@ predict.nb_bernulli_fit = function(nb_bernulli_fit,x,y,xnew=NULL,weights=FALSE){
 }
 
 
-model = nb_bernulli_fit(x=as.matrix(X_training), y=as.matrix(training_data$W))
-preds = predict.nb_bernulli_fit(model, x = as.matrix(X_training), y = as.factor(training_data$W), xnew = as.matrix(X_test))$prediction
+#model = nb_bernulli_fit(x=as.matrix(X_training), y=as.matrix(training_data$W))
+#preds = predict.nb_bernulli_fit(model, x = as.matrix(X_training), y = as.factor(training_data$W), xnew = as.matrix(X_test))$prediction
 
 
-
+#10
 
 
 xgboost_fit = function(x,y,args=list()){
@@ -374,8 +374,8 @@ predict.xgboost_fit = function(xgboost_fit,x,y,xnew=NULL,weights=FALSE){
 
 
 
-model = xgboost_fit(as.matrix(X_training), as.matrix(W_training$W))
-preds = predict.xgboost_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
+#model = xgboost_fit(as.matrix(X_training), as.matrix(W_training$W))
+#preds = predict.xgboost_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
 
 svm_fit = function(x,y,args=list()){
   model = do.call(svm, c(list(y = y, x = x, probability = TRUE, kernel = "sigmoid", 
@@ -400,8 +400,8 @@ predict.svm_fit <- function(svm_fit, x, y, xnew = NULL, weights = FALSE) {
 }
 
 
-model = svm_fit(x=as.matrix(X_training), y=as.matrix(W_training$W))
-preds = predict.svm_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
+#model = svm_fit(x=as.matrix(X_training), y=as.matrix(W_training$W))
+#preds = predict.svm_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
 
 
 
@@ -444,12 +444,12 @@ predict.qda_fit = function(qda_fit,x,y,xnew=NULL,weights=FALSE){
 }
 
 
-model <- qda_fit(x = as.matrix(X_training), y = as.factor(W_training$W))
-preds <- predict.qda_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
+#model <- qda_fit(x = as.matrix(X_training), y = as.factor(W_training$W))
+#preds <- predict.qda_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
 
 
 probability_forest_fit = function(x,y, args=list()){
-  model = do.call(probability_forest, c(list(X = x, Y = y), args))
+  model = do.call(probability_forest, c(list(X = x, Y = as.factor(y)), args))
   model
 }
 
@@ -467,12 +467,13 @@ predict.probability_forest_fit = function(probability_forest_fit, x,y,xnew=NULL,
 
 
 
-model <- probability_forest_fit(x = as.matrix(X_training), y = as.factor(W_training$W))
-preds <- predict.probability_forest_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
+#model <- probability_forest_fit(x = as.matrix(X_training), y = as.factor(W_training$W))
+#preds <- predict.probability_forest_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
 
 
 bagging_fit = function(x, y, args = list()) {
   data = as.data.frame(cbind(y, x))
+  colnames(data)[1] <- "y"
   data$y <- as.factor(data$y)
   model = do.call(bagging, c(list(formula = y ~ ., data = data,
                                   mfinal = 50,
@@ -501,13 +502,14 @@ predict.bagging_fit = function(bagging_fit,x,y,xnew=NULL,weights=FALSE){
 }
 
 
-model = bagging_fit(x = as.matrix(X_training), y = W_training$W)
-preds = predict.bagging_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
+#model = bagging_fit(x = as.matrix(X_training), y = W_training$W)
+#preds = predict.bagging_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
 
 
 
 boosting_fit = function(x, y, args = list()) {
   data = as.data.frame(cbind(y, x))
+  colnames(data)[1] <- "y"
   data$y <- as.factor(data$y)
   model = do.call(boosting, c(list(formula = y ~ ., data = data,
                                   mfinal = 50,
@@ -535,12 +537,13 @@ predict.boosting_fit = function(boosting_fit,x,y,xnew=NULL,weights=FALSE){
 }
 
 
-model = boosting_fit(x = as.matrix(X_training), y = W_training$W)
-preds = predict.boosting_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
+#model = boosting_fit(x = as.matrix(X_training), y = W_training$W)
+#preds = predict.boosting_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
 
 
 adaboost_fit = function(x,y,args=list()){
   data = as.data.frame(cbind(y, x))
+  colnames(data)[1] <- "y"
   data$y <- as.factor(data$y)
   model = do.call(adaboost ,c(list(data=data, formula = y ~ ., nIter=20, loss="logistic", w=NULL), args))
   model
@@ -558,14 +561,16 @@ predict.adaboost_fit = function(adaboost_fit, x,y,xnew=NULL,weights=FALSE){
 }
 
 
-model = adaboost_fit(x = as.matrix(X_training), y = as.factor(W_training$W))
+model = adaboost_fit(x = as.matrix(X_training), y = as.factor(W_training))
 preds = predict.boosting_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
+#data = as.data.frame(cbind((W_training), X_training))
 
 # @Maren: kmax depedent on # classes?
 knn_fit = function(x,y,args=list(kmax=10)){
-  data = as.data.frame(cbind(y, x))
+  data = as.data.frame(cbind(as_tibble(y), x))
+  colnames(data)[1] <- "y"
   data$y <- as.factor(data$y)
-  model = do.call( train.kknn ,c(list(formula = y ~ ., data = data), args))
+  model = do.call(train.kknn ,c(list(formula = y ~ ., data = data), args))
   model
 }
 
@@ -575,19 +580,20 @@ predict.knn_fit = function(knn_fit, x,y,xnew=NULL,weights=FALSE){
     w = NULL
   }
   else w = NULL
-  
+  xnew = as.data.frame(xnew)
   fit = predict(knn_fit, newdata = xnew, type='prob')
   list("prediction"=fit,"weights"=w)
 }
 
 
-model = knn_fit(x = as.matrix(X_training), y = as.factor(W_training$W), args = list(kmax=20))
-preds = predict.knn_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
+#model = knn_fit(x = as.matrix(X_training), y = as.factor(W_training), args = list(kmax=20))
+#preds = predict.knn_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
 
 
 
 knn_radius_fit = function(x,y,args=list(distance=10)){
   data = as.data.frame(cbind(y, x))
+  colnames(data)[1] <- "y"
   data$y <- as.factor(data$y)
   model = do.call( train.kknn ,c(list(formula = y ~ ., data = data), args))
   model
@@ -599,13 +605,34 @@ predict.knn_radius_fit = function(knn_radius_fit, x,y,xnew=NULL,weights=FALSE){
     w = NULL
   }
   else w = NULL
-  
-  fit = predict(knn_fit, newdata = xnew, type='prob')
+  xnew = as.data.frame(xnew)
+  fit = predict(knn_radius_fit, newdata = xnew, type='prob')
   list("prediction"=fit,"weights"=w)
 }
 
-model = knn_radius_fit(x = as.matrix(X_training), y = as.factor(W_training$W), args = list(distance=5))
-preds = predict.knn_radius_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
+#model = knn_radius_fit(x = as.matrix(X_training), y = as.factor(W_training), args = list(distance=5))
+#preds = predict.knn_radius_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
+
+mlpc_fit = function(x,y,args=list(size=1)){
+  model = do.call(nnet ,c(list(x=x, y = class.ind(y), softmax = TRUE), args))
+  model
+}
+
+predict.mlpc_fit = function(mlpc_fit, x,y,xnew=NULL,weights=FALSE){
+  if (is.null(xnew)) xnew = x
+  if (weights==TRUE) {
+    w = NULL
+  }
+  else w = NULL
+  
+  fit = predict(mlpc_fit, newdata=xnew)
+  list("prediction"=fit,"weights"=w)
+}
+
+
+#model = mlpc_fit(x = as.matrix(X_training), y = as.factor(W_training$W))
+#preds = predict.mlpc_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
+
 
 
 
