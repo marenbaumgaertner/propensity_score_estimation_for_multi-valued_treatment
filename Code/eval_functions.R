@@ -33,8 +33,12 @@ brier_score <- function(probabilities, outcome, binary = TRUE){
   
   # @Maren: wie kann ich R sagen dass es okay ist wenn beide dimension identisch sind?
   if(unique(dim(probabilities) == dim(outcome))){
-    bs <- mean((probabilities - outcome)^2)
-    
+    if (binary==TRUE){
+      bs <- mean((probabilities - outcome)^2, na.rm=TRUE)
+    }else{
+      bs <- mean(rowMeans((probabilities - outcome)^2, na.rm = TRUE), na.rm = TRUE)
+      
+    }
   }
   return(bs)
   

@@ -92,7 +92,7 @@ W_test <-     as.matrix(data.frame(W = test_data$W))
 X_test <-     as.matrix(data.frame(X[!split_indices, ]))
 ```
 
-# Train classifiers
+# Train binary classifiers
 ```{r}
 # List of classifiers
 classifiers <- c(
@@ -152,7 +152,7 @@ for (classifier in classifiers) {
 brier_scores <- sapply(results, function(result) result$brier_score)
 
 # Create a data frame with classifier names and Brier scores
-results_df <- data.frame(Classifier = classifier_names, Brier_Score = brier_scores) %>% arrange(Brier_Score)
+results_df <- data.frame(Classifier = classifiers, Brier_Score = brier_scores) %>% arrange(Brier_Score)
 
 # Display the table using kable
 kable(results_df, caption = "Brier Scores for Classifiers")
@@ -176,5 +176,104 @@ make_calibtation_plot(results$qda$predictions, as_tibble(W_test), "QDA")
 make_calibtation_plot(results$svm$predictions, as_tibble(W_test), "SVM")
 make_calibtation_plot(results$xgboost$predictions, as_tibble(W_test), "XGBoost")
 ```
+# Create multi-valued data
+```{r}
+n=5000
+K=5
+p=5
 
+W <- sample(seq(1, K, by = 1), replace = TRUE, n)
+X = matrix(runif(n*p,-pi,pi),ncol=p)
+
+
+W.levels <- sort(unique(W))
+K <- length(W.levels)
+
+
+#dataset_f <- data.frame(W = as.factor(W),X) # with W as factor
+dataset <- data.frame(W=W,X)
+
+split_indices <- sample.split(dataset$W, SplitRatio = 0.8)
+training_data <- dataset[split_indices, ]
+test_data <- dataset[!split_indices, ]
+
+#training_data_f <- dataset_f[split_indices, ]
+#test_data_f <- dataset_f[!split_indices, ]
+
+W_training <- as.matrix(data.frame(W = training_data$W))
+X_training <- as.matrix(data.frame(X[split_indices, ]))
+W_test <-     as.matrix(data.frame(W = test_data$W))
+X_test <-     as.matrix(data.frame(X[!split_indices, ]))
+
+```
+
+# Train multi-valued classifier
+```{r}
+# List of classifiers
+classifiers <- c(
+  "bagging", "boosting", "knn",
+  "knn_radius", "lda", #"logit",
+  "mlpc", "nb_bernulli", "nb_gaussian",
+  "probability_forest", "qda", "svm", "xgboost"
+)
+
+# Initialize a list to store results
+results <- list()
+classifier=classifiers[1]
+#
+
+# Loop through classifiers
+for (classifier in classifiers) {
+  print(classifier)
+  # Create model
+  model <- do.call(paste0(classifier, "_fit"), list(x=X_training, y=W_training))
+  
+  # Make predictions
+  predictions <- do.call(paste0("predict.", classifier,  "_fit"), 
+                         list(model, X_test, W_test, xnew = X_test))$prediction
+  
+
+  if (classifier == "probability_forest"){
+    predictions = predictions$predictions
+  }
+  if (classifier %in% c("xgboost")){
+    predictions = matrix(predictions, nrow = length(W_test), ncol = K, byrow = TRUE)
+  }
+  
+  predictions = predictions %>% as_tibble()
+  if (colnames(predictions)[1] == "V1"){
+    colnames(predictions) <- c("1", "2", "3", "4", "5")
+  }
+  
+   # Reorder the columns in the dataframe
+  predictions <- predictions[, c("1", "2", "3", "4", "5"), drop = FALSE]
+  
+  # Calculate Brier score
+  bs <- brier_score(predictions, W_test, binary = FALSE)
+  
+  # Make calibration plot
+  #plot_filename <- paste(classifier, ".png", sep = "")
+  #make_calibtation_plot(predictions, as_tibble(W_test), classifier)
+  
+  # Store results
+  results[[classifier]] <- list(predictions = predictions, brier_score = bs)
+}
+
+
+```
+
+# Evaluation
+## Brier Score
+```{r, message=FALSE, echo=FALSE}
+brier_scores <- sapply(results, function(result) result$brier_score)
+
+# Create a data frame with classifier names and Brier scores
+results_df <- data.frame(Classifier = classifiers, Brier_Score = brier_scores) %>% arrange(Brier_Score)
+
+# Display the table using kable
+kable(results_df, caption = "Brier Scores for Classifiers")
+```
+```{r}
+
+```
 

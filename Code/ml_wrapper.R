@@ -292,7 +292,15 @@ predict.lasso_fit = function(lasso_fit,x,y,xnew=NULL,weights=FALSE) {
 
 
 logit_fit = function(x,y,args=list()){
-  logit = do.call(cv.glmnet, c(list(x=x,y=y),args))
+  if (length(unique(y))==2){
+    logit = do.call(cv.glmnet, c(list(x=x,y=y),args))
+  }else{
+    data = as.data.frame(cbind(y, x))
+    colnames(data)[1] <- "y"
+    data$y <- as.factor(data$y)
+    logit = do.call(nnet::multinom, c(list(formula =y~., data = data)))
+    #logit = do.call(glmnet, c(list(x=x,y=y, family="multinomial"),args))
+  }
   logit
 }
 
@@ -303,7 +311,12 @@ predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE){
   }
   else w = NULL
   
-  fit = predict(logit_fit, newx=xnew, type = "response")
+  if (length(unique(y))==2){
+    fit = predict(logit_fit, newx=xnew, type = "response")
+  }else{
+    fit = predict(logit_fit, newx=xnew, type = "prob")
+    
+  }
   list("prediction"=fit,"weights"=w)
 }
 
@@ -358,7 +371,14 @@ predict.nb_bernulli_fit = function(nb_bernulli_fit,x,y,xnew=NULL,weights=FALSE){
 
 
 xgboost_fit = function(x,y,args=list()){
-  model = do.call(xgboost, c(list(data=x,label=y, nrounds=10, objective = "binary:logistic", eval_metric = "rmse", max_depth = 5),args))
+  K = length(unique(y))
+  if (K==2){
+     model = do.call(xgboost, c(list(data=x,label=y, nrounds=10, objective = "binary:logistic", eval_metric = "rmse", max_depth = 5),args))
+  }else{
+    y = y-1
+    model = do.call(xgboost, c(list(data=x,label=y, nrounds=10, num_class = K, objective = "multi:softprob", eval_metric = "mlogloss", max_depth = 5),args))
+  }
+  
   model
 }
 predict.xgboost_fit = function(xgboost_fit,x,y,xnew=NULL,weights=FALSE){
@@ -561,8 +581,8 @@ predict.adaboost_fit = function(adaboost_fit, x,y,xnew=NULL,weights=FALSE){
 }
 
 
-model = adaboost_fit(x = as.matrix(X_training), y = as.factor(W_training))
-preds = predict.boosting_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
+#model = adaboost_fit(x = as.matrix(X_training), y = as.factor(W_training))
+#preds = predict.boosting_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
 #data = as.data.frame(cbind((W_training), X_training))
 
 # @Maren: kmax depedent on # classes?
@@ -614,7 +634,7 @@ predict.knn_radius_fit = function(knn_radius_fit, x,y,xnew=NULL,weights=FALSE){
 #preds = predict.knn_radius_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
 
 mlpc_fit = function(x,y,args=list(size=1)){
-  model = do.call(nnet ,c(list(x=x, y = class.ind(y), softmax = TRUE), args))
+  model = do.call(nnet ,c(list(x=x, y = class.ind(y), softmax = TRUE, lineout=TRUE), args))
   model
 }
 
