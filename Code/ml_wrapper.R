@@ -291,15 +291,11 @@ predict.lasso_fit = function(lasso_fit,x,y,xnew=NULL,weights=FALSE) {
 }
 
 
-logit_fit = function(x,y,args=list()){
+logit_fit = function(x,y,args=list(alpha = 0.5)){
   if (length(unique(y))==2){
-    logit = do.call(cv.glmnet, c(list(x=x,y=y),args))
+    logit = do.call(cv.glmnet, c(list(x=x,y=y, family = "binomial", type.measure = "class"),args))
   }else{
-    data = as.data.frame(cbind(y, x))
-    colnames(data)[1] <- "y"
-    data$y <- as.factor(data$y)
-    logit = do.call(nnet::multinom, c(list(formula =y~., data = data)))
-    #logit = do.call(glmnet, c(list(x=x,y=y, family="multinomial"),args))
+    logit = do.call(cv.glmnet, c(list(x=x,y=y, family = "multinomial", type.measure = "class"),args))
   }
   logit
 }
@@ -311,12 +307,13 @@ predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE){
   }
   else w = NULL
   
-  if (length(unique(y))==2){
-    fit = predict(logit_fit, newx=xnew, type = "response")
-  }else{
-    fit = predict(logit_fit, newx=xnew, type = "prob")
+  fit = predict(logit_fit, newx=xnew, s = "lambda.min", type = "response") %>% as_tibble()
+  if (length(logit_fit$glmnet.fit$classnames)==2){
+    fit[,2] = 1 - fit[,1]
+    colnames(fit) = rev(logit_fit$glmnet.fit$classnames)
     
   }
+  
   list("prediction"=fit,"weights"=w)
 }
 
@@ -373,7 +370,8 @@ predict.nb_bernulli_fit = function(nb_bernulli_fit,x,y,xnew=NULL,weights=FALSE){
 xgboost_fit = function(x,y,args=list()){
   K = length(unique(y))
   if (K==2){
-     model = do.call(xgboost, c(list(data=x,label=y, nrounds=10, objective = "binary:logistic", eval_metric = "rmse", max_depth = 5),args))
+     model = do.call(xgboost, c(list(data=x,label=y, nrounds=10, 
+                                     objective = "binary:logistic", eval_metric = "logloss", max_depth = 5),args))
   }else{
     y = y-1
     model = do.call(xgboost, c(list(data=x,label=y, nrounds=10, num_class = K, objective = "multi:softprob", eval_metric = "mlogloss", max_depth = 5),args))
@@ -394,7 +392,7 @@ predict.xgboost_fit = function(xgboost_fit,x,y,xnew=NULL,weights=FALSE){
 
 
 
-#model = xgboost_fit(as.matrix(X_training), as.matrix(W_training$W))
+#model = xgboost_fit(as.matrix(X_training), as.matrix(W_training))
 #preds = predict.xgboost_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
 
 svm_fit = function(x,y,args=list()){
@@ -475,8 +473,10 @@ probability_forest_fit = function(x,y, args=list()){
 
 predict.probability_forest_fit = function(probability_forest_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
+  
   if (weights==TRUE) {
-    w = NULL
+    if (packageVersion("grf") < "2.0.0") w = get_sample_weights(forest_grf_fit,newdata=xnew)
+    else  w = get_forest_weights(forest_grf_fit,newdata=xnew)
   }
   else w = NULL
   
@@ -522,7 +522,7 @@ predict.bagging_fit = function(bagging_fit,x,y,xnew=NULL,weights=FALSE){
 }
 
 
-#model = bagging_fit(x = as.matrix(X_training), y = W_training$W)
+#model = bagging_fit(x = as.matrix(X_training), y = W_training)
 #preds = predict.bagging_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
 
 
@@ -557,7 +557,7 @@ predict.boosting_fit = function(boosting_fit,x,y,xnew=NULL,weights=FALSE){
 }
 
 
-#model = boosting_fit(x = as.matrix(X_training), y = W_training$W)
+#model = boosting_fit(x = as.matrix(X_training), y = W_training)
 #preds = predict.boosting_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
 
 
@@ -633,7 +633,7 @@ predict.knn_radius_fit = function(knn_radius_fit, x,y,xnew=NULL,weights=FALSE){
 #model = knn_radius_fit(x = as.matrix(X_training), y = as.factor(W_training), args = list(distance=5))
 #preds = predict.knn_radius_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
 
-mlpc_fit = function(x,y,args=list(size=1)){
+mlpc_fit = function(x,y,args=list(size=1, maxit=100)){
   model = do.call(nnet ,c(list(x=x, y = class.ind(y), softmax = TRUE, lineout=TRUE), args))
   model
 }
@@ -650,9 +650,184 @@ predict.mlpc_fit = function(mlpc_fit, x,y,xnew=NULL,weights=FALSE){
 }
 
 
-#model = mlpc_fit(x = as.matrix(X_training), y = as.factor(W_training$W))
+#model = mlpc_fit(x = as.matrix(X_training), y = as.factor(W_training))
 #preds = predict.mlpc_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
 
+# Function to create a one-vs-one classifier
+ovo_fit <- function(x, y, classifier = "logit") {
+  class_labels <- sort(unique(y))
+  num_classes <- length(class_labels)
+  ovo_classifiers <- list()
+  
+  # Create binary classifiers for each pair of classes
+  for (i in 1:(num_classes - 1)) {
+    for (j in (i + 1):num_classes) {
+      class_i <- class_labels[i]
+      class_j <- class_labels[j]
+      
+      subset_x <- x[y %in% c(class_i, class_j),]
+      subset_y <- y[y %in% c(class_i, class_j)]
+      
+      if (classifier=="xgboost"){
+        subset_y <- ifelse(subset_y == i, 1, 0)
+        
+      }
+      
+      # @Maren: change to ml_methods[[ml]]
+      ovo_classifiers[[paste(class_i, class_j, sep = "_")]] <- do.call(
+        paste0(classifier, "_fit"),
+        list(y = subset_y,
+             x = subset_x)
+      )
+    }
+  }
+  
+  return(ovo_classifiers)
+}
+
+
+predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, classifier = "logit") {
+  if (is.null(xnew)) xnew = x
+  if (weights==TRUE) {
+    w = NULL
+  }
+  else w = NULL
+  
+  n_classifiers <- length(ovo_fit)
+  n_samples <- nrow(xnew)
+  n_classes <- length(unique(unlist(strsplit(names(ovo_fit), "_"))))
+  
+  # Initialize an empty matrix to store the probabilities
+  fit <- matrix(0, nrow = n_samples, ncol = n_classes) %>% as_tibble()
+  colnames(fit) <- unique(unlist(strsplit(names(ovo_fit), "_")))
+  
+  for (i in 1:n_classifiers) {
+    # Extract class names from the binary classifier name
+    class_names <- unlist(strsplit(names(model)[[i]], "_"))
+    class_i <- class_names[1]
+    class_j <- class_names[2]
+    #print(paste0("classifier ", i))
+    
+    # Predict probabilities using the i-th binary classifier
+    # @Maren: change to ml_methods[[ml]]
+    fit_raw <- do.call(paste0("predict.", classifier,  "_fit"), 
+                       list(ovo_fit[[i]], x=x, y=y, xnew = xnew))$prediction
+    
+    if (classifier == "adaboost"){
+      fit_raw = fit_raw$prob
+      fit_raw = fit_raw[,2] %>% as_tibble()
+    }
+    if (classifier == "probability_forest"){
+      fit_raw = fit_raw$predictions
+      #fit_raw = fit_raw[,2] %>% as_tibble()
+    }
+    if (classifier %in% c("forest_grf", "xgboost")){
+      fit_raw = fit_raw %>% as_tibble()
+    }
+
+
+    # Compute probabilities for second class if not provided by default
+    # @Maren: check how to add correct colnames
+    fit_raw = fit_raw %>% as_tibble()
+    if (ncol(fit_raw==1)){
+      fit_raw[,2] <- 1 - fit_raw[,1]
+    }
+    if (!(all(class_names %in% colnames(fit_raw)))) {
+      colnames(fit_raw) <- class_names
+    }
+    
+    
+    # Update the corresponding columns in e_hat
+    fit[, `class_i`] <- fit[, `class_i`] + fit_raw[, `class_i`]
+    fit[, `class_j`] <- fit[, `class_j`] + fit_raw[, `class_j`]
+  }
+  
+  # Normalize the probabilities to sum up to 1 for each sample
+  fit <- fit / rowSums(fit)
+  
+  
+  list("prediction"=fit,"weights"=w)
+  
+}
+
+
+# One-vs-Rest Classifier
+ovr_fit <- function(x, y, classifier = "logit") {
+  class_labels <- sort(unique(y))
+  num_classes <- length(class_labels)
+  ovr_classifiers <- list()
+  
+  # Create binary classifiers for each pair of classes
+  for (i in 1:(num_classes)) {
+      class_i <- class_labels[i]      
+      binarized_y <- ifelse(y == i, 1, 0)
+  
+      
+      # @Maren: change to ml_methods[[ml]]
+      ovr_classifiers[[paste(class_i)]] <- do.call(
+        paste0(classifier, "_fit"),
+        list(y = binarized_y, x = x)
+      )
+  }
+  
+  return(ovr_classifiers)
+}
+
+
+predict.ovr_fit <- function(ovr_fit,x,y, xnew=NULL,weights=FALSE, classifier = "logit") {
+  if (is.null(xnew)) xnew = x
+  if (weights==TRUE) {
+    w = NULL
+  }
+  else w = NULL
+  
+  n_classifiers <- length(ovr_fit)
+  n_samples <- nrow(xnew)
+  n_classes <- n_classifiers
+
+  # Initialize an empty matrix to store the probabilities
+  fit <- matrix(0, nrow = n_samples, ncol = n_classes) %>% as_tibble()
+  colnames(fit) <- seq.int(1, n_classes)
+  
+  for (i in 1:n_classifiers) {
+    #print(paste0("classifier ", i))
+    # Predict probabilities using the i-th binary classifier
+    # @Maren: change to ml_methods[[ml]]
+    fit_raw <- do.call(paste0("predict.", classifier,  "_fit"), 
+                       list(ovr_fit[[i]], x=x, y=y, xnew = xnew))$prediction
+
+    if (classifier == "adaboost"){
+      fit_raw = fit_raw$prob
+      fit_raw = fit_raw[,2] %>% as_tibble()
+    }
+    if (classifier == "probability_forest"){
+      fit_raw = fit_raw$predictions
+      fit_raw = fit_raw[,2] %>% as_tibble()
+    }
+    if (classifier %in% c("forest_grf", "xgboost")){
+      fit_raw = fit_raw %>% as_tibble()
+    }
+    
+    if (classifier =="logit"){
+      fit_raw = fit_raw[,1] %>% as_tibble()
+    }
+    
+    if (ncol(fit_raw) == 2){
+      fit_raw = fit_raw[,2] %>% as_tibble()
+    }
+
+    
+    # Update the corresponding columns in e_hat
+    fit[, `i`] <- fit[, `i`] + fit_raw
+  }
+  
+  # Normalize the probabilities to sum up to 1 for each sample
+  fit <- fit / rowSums(fit)
+  
+  
+  list("prediction"=fit,"weights"=w)
+  
+}
 
 
 

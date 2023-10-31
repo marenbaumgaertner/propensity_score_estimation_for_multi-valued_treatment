@@ -44,6 +44,7 @@ library(plyr)
 library(causalDML)
 library(binda)
 library(kknn)
+library(calibrate)
 ```
 
 ```{r}
@@ -58,7 +59,7 @@ options(scipen= 999)
 # Create binary data
 ```{r}
 # Set parameters
-n = 4000
+n = 3000
 p = 15
 
 # Draw sample
@@ -103,9 +104,14 @@ classifiers <- c(
 )
 
 # Initialize a list to store results
-results <- list()
-#classifier <- classifiers[14]
-#
+results_binary <- list()
+classifier <- classifiers[3]
+
+# use uniform distribution of probabilities as benchmark
+predictions = matrix(1/K, nrow = nrow(test_data), ncol = K)
+bs = brier_score(predictions, W_test, binary = FALSE)
+results_binary[["uniform"]] = list(predictions = predictions, brier_score = bs)
+
 
 # Loop through classifiers
 for (classifier in classifiers) {
@@ -129,6 +135,10 @@ for (classifier in classifiers) {
     predictions = predictions %>% as_tibble()
   }
   
+  if (classifier =="logit"){
+    predictions = predictions[,1] %>% as_tibble()
+  }
+  
   if (ncol(predictions) == 2){
     predictions = predictions[,2] %>% as_tibble()
   }
@@ -140,7 +150,7 @@ for (classifier in classifiers) {
   make_calibtation_plot(predictions, as_tibble(W_test), classifier)
   
   # Store results
-  results[[classifier]] <- list(predictions = predictions, brier_score = bs)
+  results_binary[[classifier]] <- list(predictions = predictions, brier_score = bs)
 }
 
 
@@ -149,10 +159,10 @@ for (classifier in classifiers) {
 
 ## Brier Score
 ```{r, message=FALSE, echo=FALSE}
-brier_scores <- sapply(results, function(result) result$brier_score)
+brier_scores <- sapply(results_binary, function(result) result$brier_score)
 
 # Create a data frame with classifier names and Brier scores
-results_df <- data.frame(Classifier = classifiers, Brier_Score = brier_scores) %>% arrange(Brier_Score)
+results_df <- data.frame(Classifier = c("uniform", classifiers), Brier_Score = brier_scores) %>% arrange(Brier_Score)
 
 # Display the table using kable
 kable(results_df, caption = "Brier Scores for Classifiers")
@@ -160,25 +170,25 @@ kable(results_df, caption = "Brier Scores for Classifiers")
 
 ## Calibration plots
 ```{r}
-make_calibtation_plot(results$adaboost$predictions, as_tibble(W_test), "adaboost")
-make_calibtation_plot(results$bagging$predictions, as_tibble(W_test), "bagging")
-make_calibtation_plot(results$boosting$predictions, as_tibble(W_test), "boosting")
-make_calibtation_plot(results$forest_grf$predictions, as_tibble(W_test), "Random Forest")
-make_calibtation_plot(results$knn$predictions, as_tibble(W_test), "KNN")
-make_calibtation_plot(results$knn_radius$predictions, as_tibble(W_test), "KNN Radius")
-make_calibtation_plot(results$lda$predictions, as_tibble(W_test), "LDA")
-make_calibtation_plot(results$logit$predictions, as_tibble(W_test), "Logistic regression")
-make_calibtation_plot(results$mlpc$predictions, as_tibble(W_test), "MLPC")
-make_calibtation_plot(results$nb_bernulli$predictions, as_tibble(W_test), "Naive Bayes (Bernulli)")
-make_calibtation_plot(results$nb_gaussian$predictions, as_tibble(W_test), "Naive Bayes (Gaussian)")
-make_calibtation_plot(results$probability_forest$predictions, as_tibble(W_test), "Probability Forest")
-make_calibtation_plot(results$qda$predictions, as_tibble(W_test), "QDA")
-make_calibtation_plot(results$svm$predictions, as_tibble(W_test), "SVM")
-make_calibtation_plot(results$xgboost$predictions, as_tibble(W_test), "XGBoost")
+make_calibtation_plot(results_binary$adaboost$predictions, as_tibble(W_test), "adaboost")
+make_calibtation_plot(results_binary$bagging$predictions, as_tibble(W_test), "bagging")
+make_calibtation_plot(results_binary$boosting$predictions, as_tibble(W_test), "boosting")
+make_calibtation_plot(results_binary$forest_grf$predictions, as_tibble(W_test), "Random Forest")
+make_calibtation_plot(results_binary$knn$predictions, as_tibble(W_test), "KNN")
+make_calibtation_plot(results_binary$knn_radius$predictions, as_tibble(W_test), "KNN Radius")
+make_calibtation_plot(results_binary$lda$predictions, as_tibble(W_test), "LDA")
+make_calibtation_plot(results_binary$logit$predictions, as_tibble(W_test), "Logistic regression")
+make_calibtation_plot(results_binary$mlpc$predictions, as_tibble(W_test), "MLPC")
+make_calibtation_plot(results_binary$nb_bernulli$predictions, as_tibble(W_test), "Naive Bayes (Bernulli)")
+make_calibtation_plot(results_binary$nb_gaussian$predictions, as_tibble(W_test), "Naive Bayes (Gaussian)")
+make_calibtation_plot(results_binary$probability_forest$predictions, as_tibble(W_test), "Probability Forest")
+make_calibtation_plot(results_binary$qda$predictions, as_tibble(W_test), "QDA")
+make_calibtation_plot(results_binary$svm$predictions, as_tibble(W_test), "SVM")
+make_calibtation_plot(results_binary$xgboost$predictions, as_tibble(W_test), "XGBoost")
 ```
 # Create multi-valued data
 ```{r}
-n=5000
+n=3000
 K=5
 p=5
 
@@ -212,15 +222,19 @@ X_test <-     as.matrix(data.frame(X[!split_indices, ]))
 # List of classifiers
 classifiers <- c(
   "bagging", "boosting", "knn",
-  "knn_radius", "lda", #"logit",
-  "mlpc", "nb_bernulli", "nb_gaussian",
+  "knn_radius", "lda", "logit",
+  "mlpc", "nb_bernulli", "nb_gaussian", "ovo",
   "probability_forest", "qda", "svm", "xgboost"
 )
 
 # Initialize a list to store results
 results <- list()
-classifier=classifiers[1]
-#
+classifier=classifiers[10]
+
+# use uniform distribution of probabilities as benchmark
+predictions = matrix(1/K, nrow = nrow(test_data), ncol = K)
+bs = brier_score(predictions, W_test, binary = FALSE)
+results[["uniform"]] = list(predictions = predictions, brier_score = bs)
 
 # Loop through classifiers
 for (classifier in classifiers) {
@@ -232,7 +246,7 @@ for (classifier in classifiers) {
   predictions <- do.call(paste0("predict.", classifier,  "_fit"), 
                          list(model, X_test, W_test, xnew = X_test))$prediction
   
-
+  
   if (classifier == "probability_forest"){
     predictions = predictions$predictions
   }
@@ -241,12 +255,12 @@ for (classifier in classifiers) {
   }
   
   predictions = predictions %>% as_tibble()
-  if (colnames(predictions)[1] == "V1"){
-    colnames(predictions) <- c("1", "2", "3", "4", "5")
+  if (colnames(predictions)[1] != "1"){
+    colnames(predictions) <- seq.int(1, ncol(predictions))
   }
   
    # Reorder the columns in the dataframe
-  predictions <- predictions[, c("1", "2", "3", "4", "5"), drop = FALSE]
+  predictions <- predictions[, order(names(predictions))]
   
   # Calculate Brier score
   bs <- brier_score(predictions, W_test, binary = FALSE)
@@ -268,12 +282,119 @@ for (classifier in classifiers) {
 brier_scores <- sapply(results, function(result) result$brier_score)
 
 # Create a data frame with classifier names and Brier scores
+results_df <- data.frame(Classifier = c("uniform", classifiers), Brier_Score = brier_scores) %>% arrange(Brier_Score)
+
+# Display the table using kable
+kable(results_df, caption = "Brier Scores for Classifiers")
+```
+
+# Train multi-valued classifier using OvO
+```{r}
+
+# List of classifiers
+classifiers <- c(
+  "adaboost", "bagging", "boosting", "knn",
+  "knn_radius", "lda", "logit",
+  "mlpc", "nb_bernulli", "nb_gaussian",
+  "probability_forest", "qda", "svm", "xgboost"
+)
+
+# Initialize a list to store results
+results_ovo <- list()
+classifier=classifiers[14]
+
+# use uniform distribution of probabilities as benchmark
+
+# Loop through classifiers
+for (classifier in classifiers) {
+  print(classifier)
+  # Create model
+  model <- do.call(ovo_fit, list(x=X_training, y=W_training, classifier=classifier))
+  
+  # Make predictions
+  predictions <- do.call(predict.ovo_fit, 
+                         list(model, X_test, W_test, xnew = X_test, classifier=classifier))$prediction
+  
+   # Reorder the columns in the dataframe
+  predictions <- predictions[, order(names(predictions))]
+  
+  # Calculate Brier score
+  bs <- brier_score(predictions, W_test, binary = FALSE)
+  
+  # Make calibration plot
+  #plot_filename <- paste(classifier, ".png", sep = "")
+  #make_calibtation_plot(predictions, as_tibble(W_test), classifier)
+  
+  # Store results
+  results_ovo[[classifier]] <- list(predictions = predictions, brier_score = bs)
+}
+
+
+```
+
+## Brier Score
+```{r, message=FALSE, echo=FALSE}
+brier_scores <- sapply(results_ovo, function(result) result$brier_score)
+
+# Create a data frame with classifier names and Brier scores
 results_df <- data.frame(Classifier = classifiers, Brier_Score = brier_scores) %>% arrange(Brier_Score)
 
 # Display the table using kable
 kable(results_df, caption = "Brier Scores for Classifiers")
 ```
+
+# Train multi-valued classifier using OvR
 ```{r}
+
+# List of classifiers
+classifiers <- c(
+  "adaboost", "bagging", "boosting", "knn",
+  "knn_radius", "lda", "logit",
+  "mlpc", "nb_bernulli", "nb_gaussian",
+  "probability_forest", "qda", "svm", "xgboost"
+)
+
+# Initialize a list to store results
+results_ovr <- list()
+#classifier=classifiers[5]
+
+# use uniform distribution of probabilities as benchmark
+
+# Loop through classifiers
+for (classifier in classifiers) {
+  print(classifier)
+  # Create model
+  model <- do.call(ovr_fit, list(x=X_training, y=W_training, classifier=classifier))
+  
+  # Make predictions
+  predictions <- do.call(predict.ovr_fit, 
+                         list(model, X_test, W_test, xnew = X_test, classifier=classifier))$prediction
+  
+  
+   # Reorder the columns in the dataframe
+  predictions <- predictions[, order(names(predictions))]
+  
+  # Calculate Brier score
+  bs <- brier_score(predictions, W_test, binary = FALSE)
+  
+  # Make calibration plot
+  #plot_filename <- paste(classifier, ".png", sep = "")
+  #make_calibtation_plot(predictions, as_tibble(W_test), classifier)
+  
+  # Store results
+  results_ovr[[classifier]] <- list(predictions = predictions, brier_score = bs)
+}
+
 
 ```
 
+## Brier Score
+```{r, message=FALSE, echo=FALSE}
+brier_scores <- sapply(results_ovr, function(result) result$brier_score)
+
+# Create a data frame with classifier names and Brier scores
+results_df <- data.frame(Classifier = classifiers, Brier_Score = brier_scores) %>% arrange(Brier_Score)
+
+# Display the table using kable
+kable(results_df, caption = "Brier Scores for Classifiers")
+```
