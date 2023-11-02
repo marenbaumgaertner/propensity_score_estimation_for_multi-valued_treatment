@@ -8,7 +8,7 @@ output:
     code_folding: show
 ---
 
-```{r, message=FALSE, echo=FALSE}
+```{r, message=FALSE, echo=FALSE,warning=FALSE}
 # Import libraries and dataset
 library(knitr)
 library(dplyr)
@@ -57,15 +57,15 @@ options(scipen= 999)
 
 
 # Create binary data
-```{r}
+```{r, warning=FALSE}
 # Set parameters
 n = 3000
-p = 15
+p = 10
 
 # Draw sample
 X = matrix(runif(n*p,-pi,pi),ncol=p)
-#e = function(x){2/3} # balanced
-e = function(x){pnorm(sin(x))}
+e = function(x){4/13} # balanced
+#e = function(x){pnorm(sin(x))}
 m0 = function(x){sin(x)}
 tau = function(x){1*(x>-0.5*pi)}
 #m1 = function(x){m0(x) + tau(x)}
@@ -94,10 +94,10 @@ X_test <-     as.matrix(data.frame(X[!split_indices, ]))
 ```
 
 # Train binary classifiers
-```{r}
+```{r, warning=FALSE}
 # List of classifiers
 classifiers <- c(
-  "adaboost", "bagging", "boosting", "forest_grf", "knn",
+  "adaboost", "bagging", "boosting", "knn",
   "knn_radius", "lda", "logit",
   "mlpc", "nb_bernulli", "nb_gaussian",
   "probability_forest", "qda", "svm", "xgboost"
@@ -105,7 +105,7 @@ classifiers <- c(
 
 # Initialize a list to store results
 results_binary <- list()
-classifier <- classifiers[3]
+classifier <- classifiers[1]
 
 # use uniform distribution of probabilities as benchmark
 predictions = matrix(1/K, nrow = nrow(test_data), ncol = K)
@@ -121,27 +121,11 @@ for (classifier in classifiers) {
   
   # Make predictions
   predictions <- do.call(paste0("predict.", classifier,  "_fit"), 
-                         list(model, X_test, W_test, xnew = X_test))$prediction
+                         list(model, X_test, W_training, xnew = X_test))$prediction
   
-  if (classifier == "adaboost"){
-    predictions = predictions$prob
-    predictions = predictions[,2] %>% as_tibble()
-  }
-  if (classifier == "probability_forest"){
-    predictions = predictions$predictions
-    predictions = predictions[,2] %>% as_tibble()
-  }
-  if (classifier %in% c("forest_grf", "xgboost")){
-    predictions = predictions %>% as_tibble()
-  }
-  
-  if (classifier =="logit"){
-    predictions = predictions[,1] %>% as_tibble()
-  }
-  
-  if (ncol(predictions) == 2){
-    predictions = predictions[,2] %>% as_tibble()
-  }
+  #print(colnames(predictions))
+  predictions = as_tibble(predictions) %>% select("1")
+
   # Calculate Brier score
   bs <- brier_score(predictions, W_test)
   
@@ -173,7 +157,6 @@ kable(results_df, caption = "Brier Scores for Classifiers")
 make_calibtation_plot(results_binary$adaboost$predictions, as_tibble(W_test), "adaboost")
 make_calibtation_plot(results_binary$bagging$predictions, as_tibble(W_test), "bagging")
 make_calibtation_plot(results_binary$boosting$predictions, as_tibble(W_test), "boosting")
-make_calibtation_plot(results_binary$forest_grf$predictions, as_tibble(W_test), "Random Forest")
 make_calibtation_plot(results_binary$knn$predictions, as_tibble(W_test), "KNN")
 make_calibtation_plot(results_binary$knn_radius$predictions, as_tibble(W_test), "KNN Radius")
 make_calibtation_plot(results_binary$lda$predictions, as_tibble(W_test), "LDA")
@@ -189,7 +172,7 @@ make_calibtation_plot(results_binary$xgboost$predictions, as_tibble(W_test), "XG
 # Create multi-valued data
 ```{r}
 n=3000
-K=5
+K=4
 p=5
 
 W <- sample(seq(1, K, by = 1), replace = TRUE, n)
@@ -229,7 +212,7 @@ classifiers <- c(
 
 # Initialize a list to store results
 results <- list()
-classifier=classifiers[10]
+classifier=classifiers[3]
 
 # use uniform distribution of probabilities as benchmark
 predictions = matrix(1/K, nrow = nrow(test_data), ncol = K)
@@ -246,13 +229,6 @@ for (classifier in classifiers) {
   predictions <- do.call(paste0("predict.", classifier,  "_fit"), 
                          list(model, X_test, W_test, xnew = X_test))$prediction
   
-  
-  if (classifier == "probability_forest"){
-    predictions = predictions$predictions
-  }
-  if (classifier %in% c("xgboost")){
-    predictions = matrix(predictions, nrow = length(W_test), ncol = K, byrow = TRUE)
-  }
   
   predictions = predictions %>% as_tibble()
   if (colnames(predictions)[1] != "1"){
@@ -301,7 +277,7 @@ classifiers <- c(
 
 # Initialize a list to store results
 results_ovo <- list()
-classifier=classifiers[14]
+classifier=classifiers[1]
 
 # use uniform distribution of probabilities as benchmark
 
@@ -313,7 +289,7 @@ for (classifier in classifiers) {
   
   # Make predictions
   predictions <- do.call(predict.ovo_fit, 
-                         list(model, X_test, W_test, xnew = X_test, classifier=classifier))$prediction
+                         list(model, X_test, W_training, xnew = X_test, classifier=classifier))$prediction
   
    # Reorder the columns in the dataframe
   predictions <- predictions[, order(names(predictions))]
