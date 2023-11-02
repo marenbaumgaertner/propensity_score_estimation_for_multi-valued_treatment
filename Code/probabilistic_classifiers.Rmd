@@ -108,8 +108,8 @@ results_binary <- list()
 classifier <- classifiers[1]
 
 # use uniform distribution of probabilities as benchmark
-predictions = matrix(1/K, nrow = nrow(test_data), ncol = K)
-bs = brier_score(predictions, W_test, binary = FALSE)
+predictions = matrix(1/K, nrow = nrow(test_data), ncol = 1)
+bs = brier_score(probabilities= predictions, outcome=W_test, binary = FALSE)
 results_binary[["uniform"]] = list(predictions = predictions, brier_score = bs)
 
 
@@ -127,7 +127,7 @@ for (classifier in classifiers) {
   predictions = as_tibble(predictions) %>% select("1")
 
   # Calculate Brier score
-  bs <- brier_score(predictions, W_test)
+  bs <- brier_score(probabilities = predictions, outcome = W_test)
   
   # Make calibration plot
   plot_filename <- paste(classifier, ".png", sep = "")
@@ -241,10 +241,6 @@ for (classifier in classifiers) {
   # Calculate Brier score
   bs <- brier_score(predictions, W_test, binary = FALSE)
   
-  # Make calibration plot
-  #plot_filename <- paste(classifier, ".png", sep = "")
-  #make_calibtation_plot(predictions, as_tibble(W_test), classifier)
-  
   # Store results
   results[[classifier]] <- list(predictions = predictions, brier_score = bs)
 }
@@ -262,6 +258,22 @@ results_df <- data.frame(Classifier = c("uniform", classifiers), Brier_Score = b
 
 # Display the table using kable
 kable(results_df, caption = "Brier Scores for Classifiers")
+```
+## Calibration plots
+```{r}
+make_calibtation_plot(results$bagging$predictions, as_tibble(W_test), "bagging")
+make_calibtation_plot(results$boosting$predictions, as_tibble(W_test), "boosting")
+make_calibtation_plot(results$knn$predictions, as_tibble(W_test), "KNN")
+make_calibtation_plot(results$knn_radius$predictions, as_tibble(W_test), "KNN Radius")
+make_calibtation_plot(results$lda$predictions, as_tibble(W_test), "LDA")
+make_calibtation_plot(results$logit$predictions, as_tibble(W_test), "Logistic regression")
+make_calibtation_plot(results$mlpc$predictions, as_tibble(W_test), "MLPC")
+make_calibtation_plot(results$nb_bernulli$predictions, as_tibble(W_test), "Naive Bayes (Bernulli)")
+make_calibtation_plot(results$nb_gaussian$predictions, as_tibble(W_test), "Naive Bayes (Gaussian)")
+make_calibtation_plot(results$probability_forest$predictions, as_tibble(W_test), "Probability Forest")
+make_calibtation_plot(results$qda$predictions, as_tibble(W_test), "QDA")
+make_calibtation_plot(results$svm$predictions, as_tibble(W_test), "SVM")
+make_calibtation_plot(results$xgboost$predictions, as_tibble(W_test), "XGBoost")
 ```
 
 # Train multi-valued classifier using OvO
@@ -318,7 +330,23 @@ results_df <- data.frame(Classifier = classifiers, Brier_Score = brier_scores) %
 # Display the table using kable
 kable(results_df, caption = "Brier Scores for Classifiers")
 ```
-
+## Calibration plots
+```{r}
+make_calibtation_plot(results_ovo$adaboost$predictions, as_tibble(W_test), "adaboost")
+make_calibtation_plot(results_ovo$bagging$predictions, as_tibble(W_test), "bagging")
+make_calibtation_plot(results_ovo$boosting$predictions, as_tibble(W_test), "boosting")
+make_calibtation_plot(results_ovo$knn$predictions, as_tibble(W_test), "KNN")
+make_calibtation_plot(results_ovo$knn_radius$predictions, as_tibble(W_test), "KNN Radius")
+make_calibtation_plot(results_ovo$lda$predictions, as_tibble(W_test), "LDA")
+make_calibtation_plot(results_ovo$logit$predictions, as_tibble(W_test), "Logistic regression")
+make_calibtation_plot(results_ovo$mlpc$predictions, as_tibble(W_test), "MLPC")
+make_calibtation_plot(results_ovo$nb_bernulli$predictions, as_tibble(W_test), "Naive Bayes (Bernulli)")
+make_calibtation_plot(results_ovo$nb_gaussian$predictions, as_tibble(W_test), "Naive Bayes (Gaussian)")
+make_calibtation_plot(results_ovo$probability_forest$predictions, as_tibble(W_test), "Probability Forest")
+make_calibtation_plot(results_ovo$qda$predictions, as_tibble(W_test), "QDA")
+make_calibtation_plot(results_ovo$svm$predictions, as_tibble(W_test), "SVM")
+make_calibtation_plot(results_ovo$xgboost$predictions, as_tibble(W_test), "XGBoost")
+```
 # Train multi-valued classifier using OvR
 ```{r}
 
@@ -373,4 +401,20 @@ results_df <- data.frame(Classifier = classifiers, Brier_Score = brier_scores) %
 
 # Display the table using kable
 kable(results_df, caption = "Brier Scores for Classifiers")
+```
+## Calibration plots
+```{r}
+make_calibtation_plot(results_ovr$bagging$predictions, as_tibble(W_test), "bagging")
+make_calibtation_plot(results_ovr$boosting$predictions, as_tibble(W_test), "boosting")
+make_calibtation_plot(results_ovr$knn$predictions, as_tibble(W_test), "KNN")
+make_calibtation_plot(results_ovr$knn_radius$predictions, as_tibble(W_test), "KNN Radius")
+make_calibtation_plot(results_ovr$lda$predictions, as_tibble(W_test), "LDA")
+make_calibtation_plot(results_ovr$logit$predictions, as_tibble(W_test), "Logistic regression")
+make_calibtation_plot(results_ovr$mlpc$predictions, as_tibble(W_test), "MLPC")
+make_calibtation_plot(results_ovr$nb_bernulli$predictions, as_tibble(W_test), "Naive Bayes (Bernulli)")
+make_calibtation_plot(results_ovr$nb_gaussian$predictions, as_tibble(W_test), "Naive Bayes (Gaussian)")
+make_calibtation_plot(results_ovr$probability_forest$predictions, as_tibble(W_test), "Probability Forest")
+make_calibtation_plot(results_ovr$qda$predictions, as_tibble(W_test), "QDA")
+make_calibtation_plot(results_ovr$svm$predictions, as_tibble(W_test), "SVM")
+make_calibtation_plot(results_ovr$xgboost$predictions, as_tibble(W_test), "XGBoost")
 ```

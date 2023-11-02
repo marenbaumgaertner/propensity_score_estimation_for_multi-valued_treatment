@@ -2,43 +2,38 @@
 
 brier_score <- function(probabilities, outcome, binary = TRUE){
   # reshape probabilities
-  if(binary==TRUE){
-    if(!is.matrix(probabilities)){
-      probabilities <- as.matrix(probabilities)
-    }
-    if(dim(probabilities)[2]>1){
-      probabilities <- as_tibble(probabilities)
-      if("1" %in% colnames(probabilities)){
-        probabilities <- as.matrix(probabilities$`1`)
-      }else if("V2" %in% colnames(probabilities)){
-        probabilities <- as.matrix(probabilities$`V2`)
-      }else{
-        # @Maren: some prediction have V1 and V2 as colnames, add this to code.
-        # @Maren: too much characer for 1 line, check out how you can do elegant line breaks
-        paste("Probabilities argument does not indicates which column contains the probabilities for class 1. Rename column of just use corresponding column as input.")
-        break
-      }
-    }
-    
-  }#else{
+  #if(binary==TRUE){
+  #  if(!is.matrix(probabilities)){
+  #    probabilities <- as.matrix(probabilities)
+  #  }
+  #  if(dim(probabilities)[2]>1){
+  #    probabilities <- as_tibble(probabilities)
+  #    if("1" %in% colnames(probabilities)){
+  #      probabilities <- as.matrix(probabilities$`1`)
+  #    }else if("V2" %in% colnames(probabilities)){
+  #      probabilities <- as.matrix(probabilities$`V2`)
+  #    }else{
+  #      # @Maren: some prediction have V1 and V2 as colnames, add this to code.
+  #      # @Maren: too much characer for 1 line, check out how you can do elegant line breaks
+  #      paste("Probabilities argument does not indicates which column contains the probabilities for class 1. Rename column of just use corresponding column as input.")
+  #      break
+  #    }
+  #  }
+  #  
+  #}#else{
   
   #}
   
   # reshape outcome for multi-valued treatment from 1xN to KxN
-  if(binary == TRUE){
+  if(length(unique(outcome))==2){
     outcome <- as.matrix(outcome)
   }else{
     outcome <- class.ind(as.matrix(outcome))
   }
   
-  # @Maren: wie kann ich R sagen dass es okay ist wenn beide dimension identisch sind?
+  # @Maren: wie kann ich R sagen dass es okay ist wenn beide dimension identisch sind? -> unique :P
   if(unique(dim(probabilities) == dim(outcome))){
-    if (binary==TRUE){
-      bs <- mean((probabilities - outcome)^2, na.rm=TRUE)
-    }else{
       bs <- mean(rowMeans((probabilities - outcome)^2, na.rm = TRUE), na.rm = TRUE)
-      
-    }
   }
   return(bs)
   
@@ -46,12 +41,29 @@ brier_score <- function(probabilities, outcome, binary = TRUE){
 
 
 
-make_calibtation_plot <- function(probabilities, true_outcome, method) {
-  ## Calibration plot
-  #if (ncol(probabilities)>)
-  probabilities <- as_tibble(probabilities)
-  calibration_data <- cbind(probabilities, true_outcome)
-  colnames(calibration_data) <- c("predicted_probabilities", "actual_outcomes")
+make_calibtation_plot <- function(probabilities, outcome, method) {
+  
+  class_names = colnames(probabilities)
+  
+  if (length(unique(outcome))==2){
+    calibration_data <- cbind(probabilities, outcome)
+    colnames(calibration_data) <- c("predicted_probabilities", "actual_outcomes")
+    calibration_data$group = NA
+    group=NULL
+    
+  }else{
+    probabilities <- probabilities %>% 
+      pivot_longer(cols = class_names, 
+                   names_to = "group",
+                   values_to = "predicted_probabilities")
+    true_outcome <- class.ind(W_test) %>% 
+      as_tibble() %>% 
+      pivot_longer(cols = class_names, 
+                   names_to = "group",
+                   values_to = "actual_outcomes")
+    calibration_data <- cbind(probabilities, actual_outcomes=true_outcome$actual_outcomes)
+    
+  }
   
   # Create probability bins (e.g., 10 bins)
   n_bins <- 10
@@ -59,29 +71,107 @@ make_calibtation_plot <- function(probabilities, true_outcome, method) {
   bin_centers <- seq(0, 1, by = bin_width) + bin_width / 2
   
   # Group data into bins
-  calibration_data$probability_bin <- cut(calibration_data$predicted_probabilities, breaks = bin_centers, labels = FALSE)
+  calibration_data$probability_bin <- cut(
+    calibration_data$predicted_probabilities,
+    breaks = c(-Inf, bin_centers, Inf), # use Inf such that very small/large probabilities get considered
+    labels = FALSE
+  )  
   
   # Calculate mean predicted probability and mean actual outcome for each bin
   calibration_summary <- calibration_data %>%
-    dplyr::group_by(probability_bin) %>%
+    dplyr::group_by(probability_bin, group) %>%
     dplyr::summarize(
       mean_predicted_prob = mean(predicted_probabilities),
       mean_actual_outcome = mean(actual_outcomes)
     )
   
   # Create a calibration plot
-  plot <- ggplot(calibration_summary, aes(x = mean_predicted_prob, y = mean_actual_outcome)) +
-    geom_point() +
-    geom_line() +
-    geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +  # Identity line
-    labs(
-      x = "Mean Predicted Probability",
-      y = "Mean Actual Outcome",
-      title = paste0("Calibration Plot of ", method)
-    ) +
-    scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
-    scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
-    theme_bw()
+  if (group=NULL){
+    plot <- ggplot(calibration_summary, aes(x = mean_predicted_prob, y = mean_actual_outcome)) +
+      geom_point() +
+      geom_line() +
+      geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +  # Identity line
+      labs(
+        x = "Mean Predicted Probability",
+        y = "Mean Actual Outcome",
+        title = paste0("Calibration Plot of ", method)
+      ) +
+      scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
+      scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
+      theme_bw()
+    
+  }else{
+    plot <- ggplot(calibration_summary, aes(x = mean_predicted_prob, y = mean_actual_outcome, 
+                                            color=group)) +
+      geom_point() +
+      geom_line() +
+      geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +  # Identity line
+      labs(
+        x = "Mean Predicted Probability",
+        y = "Mean Actual Outcome",
+        title = paste0("Calibration Plot of ", method)
+      ) +
+      scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
+      scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
+      theme_bw()
+    
+  }
   
   return(plot)
 }
+
+
+
+
+#true_outcome <- class.ind(W_test) %>% as_tibble()
+#probabilities <- results$bagging$predictions
+#class_names = colnames(probabilities)
+
+
+#probabilities <- probabilities %>% 
+#  pivot_longer(cols = class_names, 
+#               names_to = "group",
+#               values_to = "predicted_probabilities")
+#true_outcome <- class.ind(W_test) %>% 
+#  as_tibble() %>% 
+#  pivot_longer(cols = class_names, 
+#               names_to = "group",
+#               values_to = "actual_outcomes")
+
+#calibration_data <- cbind(probabilities, actual_outcomes=true_outcome$actual_outcomes)
+
+## Create probability bins (e.g., 10 bins)
+#n_bins <- 10
+#bin_width <- 1 / n_bins
+#bin_centers <- seq(0, 1, by = bin_width) + bin_width / 2
+
+## Group data into bins
+## Group data into bins
+#calibration_data$probability_bin <- cut(
+#  calibration_data$predicted_probabilities,
+#  breaks = c(-Inf, bin_centers, Inf),
+#  labels = FALSE
+#)
+## Calculate mean predicted probability and mean actual outcome for each bin
+#calibration_summary <- calibration_data %>%
+#  dplyr::group_by(probability_bin, group) %>%
+#  dplyr::summarize(
+#    mean_predicted_prob = mean(predicted_probabilities),
+#    mean_actual_outcome = mean(actual_outcomes)
+#  )
+
+
+## Create a calibration plot
+#plot <- ggplot(calibration_summary, aes(x = mean_predicted_prob, y = mean_actual_outcome, color=group)) +
+#  geom_point() +
+#  geom_line() +
+#  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +  # Identity line
+#  labs(
+#    x = "Mean Predicted Probability",
+#    y = "Mean Actual Outcome",
+#    title = paste0("Calibration Plot of ", method)
+#  ) +
+#  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
+#  scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
+#  theme_bw()
+#plot#
