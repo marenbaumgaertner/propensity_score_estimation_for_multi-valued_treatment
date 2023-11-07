@@ -506,9 +506,7 @@ predict.probability_forest_fit = function(probability_forest_fit, x,y,xnew=NULL,
 #preds <- predict.probability_forest_fit(model[[3]], x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))$prediction
 
 bagging_fit = function(x, y, args = list()) {
-  data = as.data.frame(cbind(y, x))
-  colnames(data)[1] <- "y"
-  data$y <- as.factor(data$y)
+  data <- data.frame(y = as.factor(y), x)
   model = do.call(bagging, c(list(formula = y ~ ., data = data,
                                   mfinal = 50,
                                   control = rpart.control(objective = "binary:logistic",
@@ -544,9 +542,7 @@ predict.bagging_fit = function(bagging_fit,x,y,xnew=NULL,weights=FALSE){
 
 
 boosting_fit = function(x, y, args = list()) {
-  data = as.data.frame(cbind(y, x))
-  colnames(data)[1] <- "y"
-  data$y <- as.factor(data$y)
+  data <- data.frame(y = as.factor(y), x)
   model = do.call(boosting, c(list(formula = y ~ ., data = data,
                                   mfinal = 50,
                                   control = rpart.control(objective = "binary:logistic",
@@ -581,9 +577,7 @@ predict.boosting_fit = function(boosting_fit,x,y,xnew=NULL,weights=FALSE){
 
 
 adaboost_fit = function(x,y,args=list()){
-  data = as.data.frame(cbind(y, x))
-  colnames(data)[1] <- "y"
-  data$y <- as.factor(data$y)
+  data <- data.frame(y = as.factor(y), x)
   model = do.call(adaboost ,c(list(data=data, formula = y ~ ., nIter=20, loss="logistic", w=NULL), args))
   model
 }
@@ -609,9 +603,7 @@ predict.adaboost_fit = function(adaboost_fit, x,y,xnew=NULL,weights=FALSE){
 
 # @Maren: kmax depedent on # classes?
 knn_fit = function(x,y,args=list(kmax=10)){
-  data = as.data.frame(cbind(as_tibble(y), x))
-  colnames(data)[1] <- "y"
-  data$y <- as.factor(data$y)
+  data <- data.frame(y = as.factor(y), x)
   model = do.call(train.kknn ,c(list(formula = y ~ ., data = data), args))
   model
 }
@@ -634,9 +626,7 @@ predict.knn_fit = function(knn_fit, x,y,xnew=NULL,weights=FALSE){
 
 
 knn_radius_fit = function(x,y,args=list(distance=10)){
-  data = as.data.frame(cbind(y, x))
-  colnames(data)[1] <- "y"
-  data$y <- as.factor(data$y)
+  data <- data.frame(y = as.factor(y), x)
   model = do.call( train.kknn ,c(list(formula = y ~ ., data = data), args))
   model
 }
@@ -674,6 +664,88 @@ predict.mlpc_fit = function(mlpc_fit, x,y,xnew=NULL,weights=FALSE){
 
 #model = mlpc_fit(x = as.matrix(X_training), y = as.factor(W_training))
 #preds = predict.mlpc_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
+
+bart_fit = function(x,y,args=list()){
+  model = do.call(bartMachine, c(list(X=as.data.frame(x), y=as.factor(y)), args))
+  model
+}
+
+predict.bart_fit = function(bart_fit, x,y,xnew, weights=FALSE){
+  if (is.null(xnew)) xnew = x
+  if (weights==TRUE) {
+    w = NULL
+  }
+  else w = NULL
+  
+  fit = predict(bart_fit, new_data=as.data.frame(xnew)) 
+  fit = as_tibble(fit)
+  fit[,2] = 1 - fit[,1]
+  colnames(fit) = rev(sort(unique(y)))
+  list("prediction"=fit,"weights"=w)
+}
+
+#model = bart_fit(x = as.matrix(X_training), y = as.factor(W_training))
+#preds = predict.bart_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
+
+
+
+ranger_fit = function(x,y,args=list()){
+  data <- data.frame(y = as.factor(y), x)
+  
+  model = do.call(ranger, c(list(data=data, formula= y~., probability=TRUE), args))
+  model
+}
+
+predict.ranger_fit = function(ranger_fit, x,y,xnew=NULL,weights=FALSE){
+  if (is.null(xnew)) xnew = x
+  if (weights==TRUE) {
+    w = NULL
+  }
+  else w = NULL
+  
+  data = as.data.frame(xnew)
+  data$y <- as.factor(0)
+  
+  fit <- predict(ranger_fit, data = data)$predictions 
+
+  list("prediction"=fit,"weights"=w)
+}
+
+#model = ranger_fit(x = as.matrix(X_training), y = W_training)
+#preds = predict.ranger_fit(model, x = as.matrix(X_training), y = W_training, xnew = X_test)$prediction
+
+
+multinom_fit = function(x,y,args=list()){
+  data <- data.frame(y = as.factor(y), x)
+  
+  model = do.call(multinom, c(list(data=data, formula= y~., model=TRUE), args))
+  model
+}
+
+predict.multinom_fit = function(multinom_fit, x,y,xnew=NULL,weights=FALSE){
+  if (is.null(xnew)) xnew = x
+  if (weights==TRUE) {
+    w = NULL
+  }
+  else w = NULL
+  
+  data = as.data.frame(xnew)
+  data$y <- as.factor(0)
+  
+  fit <- predict(multinom_fit, newdata = xnew,type="probs") %>% as_tibble()
+  if (length(unique(y))==2){
+    fit[,2] = 1-fit[,1]
+    colnames(fit) = rev(sort(unique(y)))
+  }
+  list("prediction"=fit,"weights"=w)
+}
+
+#model = multinom_fit(x = as.matrix(X_training), y = W_training)
+#preds = predict.multinom_fit(model, x = as.matrix(X_training), y = W_training, xnew = X_test)$prediction
+
+
+
+
 
 # Function to create a one-vs-one classifier
 ovo_fit <- function(x, y, classifier = "logit") {
@@ -731,7 +803,6 @@ predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, classifier = "
     #print(paste0("classifier ", i))
  
     # Predict probabilities using the i-th binary classifier
-    # @Maren: change to ml_methods[[ml]]
     fit_raw <- do.call(paste0("predict.", classifier,  "_fit"), 
                        list(ovo_fit[[i]], x=x, y=subset_y, xnew = xnew))$prediction
 
@@ -753,6 +824,7 @@ predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, classifier = "
   }
   
   # Normalize the probabilities to sum up to 1 for each sample
+  #@Maren: research
   fit <- fit / rowSums(fit)
   
   
