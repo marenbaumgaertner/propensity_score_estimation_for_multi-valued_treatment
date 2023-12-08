@@ -48,8 +48,6 @@ make_calibtation_plot <- function(probabilities, outcome, method) {
   if (length(unique(outcome))==2){
     calibration_data <- cbind(probabilities, outcome)
     colnames(calibration_data) <- c("predicted_probabilities", "actual_outcomes")
-    calibration_data$group = NA
-    group=NULL
     
   }else{
     probabilities <- probabilities %>% 
@@ -86,7 +84,7 @@ make_calibtation_plot <- function(probabilities, outcome, method) {
     )
   
   # Create a calibration plot
-  if (group=NULL){
+  if (length(unique(W_test))==2){
     plot <- ggplot(calibration_summary, aes(x = mean_predicted_prob, y = mean_actual_outcome)) +
       geom_point() +
       geom_line() +
@@ -101,6 +99,7 @@ make_calibtation_plot <- function(probabilities, outcome, method) {
       theme_bw()
     
   }else{
+    custom_palette <- c("#8E063B", "#79D359", "#4B0055", "#F7A72B", "#FFBEC1")
     plot <- ggplot(calibration_summary, aes(x = mean_predicted_prob, y = mean_actual_outcome, 
                                             color=group)) +
       geom_point() +
@@ -113,6 +112,7 @@ make_calibtation_plot <- function(probabilities, outcome, method) {
       ) +
       scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
       scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
+      scale_color_manual(values = custom_palette) +
       theme_bw()
     
   }

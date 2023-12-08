@@ -35,7 +35,7 @@ predict.mean_fit = function(mean_fit,x,y,xnew=NULL,weights=FALSE) {
   if (isTRUE(weights)) w = matrix(1 / length(y),nrow(xnew),nrow(x))
   else w = NULL
   
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit, "weights"=w)
 }
 
 
@@ -244,7 +244,7 @@ predict.forest_grf_fit = function(forest_grf_fit,x,y,xnew=NULL,weights=FALSE) {
   }
   else w = NULL
   
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit, "weights"=w)
 }
 
 
@@ -302,10 +302,11 @@ logit_fit = function(x,y,args=list(alpha = 0.5)){
 
 predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
+  
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
+
   
   fit = predict(logit_fit, newx=xnew, s = "lambda.min", type = "response") %>% as_tibble()
   if (length(logit_fit$glmnet.fit$classnames)==2){
@@ -314,7 +315,7 @@ predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE){
     
   }
   
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit, "weights"="No weighted representation available.")
 }
 
 
@@ -327,19 +328,18 @@ predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE){
 
 nb_gaussian_fit = function(x,y,args=list()){
   y = as.factor(y)
-  model = do.call(naive_bayes, c(list(x=x,y=y),args))
+  model = do.call(gaussian_naive_bayes, c(list(x=x,y=y),args))
   model
 }
 
 predict.nb_gaussian_fit = function(nb_gaussian_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   
   fit = predict(nb_gaussian_fit, newdata=xnew, type = "prob")
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
 }
 
 nb_bernulli_fit = function(x,y,args=list()){
@@ -351,12 +351,11 @@ nb_bernulli_fit = function(x,y,args=list()){
 predict.nb_bernulli_fit = function(nb_bernulli_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   
   fit = predict(nb_bernulli_fit, newdata=xnew, type = "prob")
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
 }
 
 
@@ -382,9 +381,8 @@ xgboost_fit = function(x,y,args=list()){
 predict.xgboost_fit = function(xgboost_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   
   fit = predict(xgboost_fit, newdata=xnew, type = "prob") 
   if (length(unique(y))==2){
@@ -400,7 +398,7 @@ predict.xgboost_fit = function(xgboost_fit,x,y,xnew=NULL,weights=FALSE){
     
   }
 
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
 }
 
 
@@ -418,17 +416,15 @@ svm_fit = function(x,y,args=list()){
 
 predict.svm_fit <- function(svm_fit, x, y, xnew = NULL, weights = FALSE) {
   if (is.null(xnew)) xnew = x
-  if (weights) {
-    w = NULL
-  } else {
-    w = NULL
+  if (weights==TRUE) {
+    warning("Weights are not supported for propensity score estimation.")
   }
   
   # Perform predictions using the trained SVM model
   fit <- predict(svm_fit, newdata = xnew, probability = TRUE) %>% attr("probabilities")
   
   # Return the predictions and weights (if any)
-  result <- list("prediction" = fit, "weights" = w)
+  result <- list("prediction" = fit, "weights"="No weighted representation available.")
   return(result)
 }
 
@@ -448,11 +444,10 @@ lda_fit = function(x,y,args=list()){
 predict.lda_fit = function(lda_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
-  fit <- predict(lda_fit, X_test, type="prob")$posterior
-  list("prediction"=fit,"weights"=w)
+  fit <- predict(lda_fit, X_test, type="prob")$posterior # @Maren: remove type and retry :)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
   
 }
 
@@ -467,12 +462,11 @@ qda_fit = function(x,y,args=list()){
 predict.qda_fit = function(qda_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   
   fit <- predict(qda_fit, X_test, type="prob")$posterior
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
   
 }
 
@@ -496,7 +490,7 @@ predict.probability_forest_fit = function(probability_forest_fit, x,y,xnew=NULL,
   else w = NULL
   
   fit = predict(probability_forest_fit, newdata=xnew)$predictions
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
   
 }
 
@@ -522,9 +516,8 @@ bagging_fit = function(x, y, args = list()) {
 predict.bagging_fit = function(bagging_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   
   data = as.data.frame(xnew)
   data$y <- as.factor(0)
@@ -533,7 +526,7 @@ predict.bagging_fit = function(bagging_fit,x,y,xnew=NULL,weights=FALSE){
   if (length(unique(y))==2){
     colnames(fit) = sort(unique(y))
   }
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
 }
 
 
@@ -557,9 +550,8 @@ boosting_fit = function(x, y, args = list()) {
 predict.boosting_fit = function(boosting_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   
   data = as.data.frame(xnew)
   data$y <- as.factor(0)
@@ -568,7 +560,7 @@ predict.boosting_fit = function(boosting_fit,x,y,xnew=NULL,weights=FALSE){
   if (length(unique(y))==2){
     colnames(fit) = sort(unique(y))
   }  
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
 }
 
 
@@ -585,15 +577,14 @@ adaboost_fit = function(x,y,args=list()){
 predict.adaboost_fit = function(adaboost_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   
   fit = predict(adaboost_fit, newdata=xnew, type = "probs")$prob
   if (length(unique(y))==2){
     colnames(fit) = sort(unique(y))
   }
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
 }
 
 
@@ -611,12 +602,11 @@ knn_fit = function(x,y,args=list(kmax=10)){
 predict.knn_fit = function(knn_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   xnew = as.data.frame(xnew)
   fit = predict(knn_fit, newdata = xnew, type='prob')
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
 }
 
 
@@ -627,19 +617,18 @@ predict.knn_fit = function(knn_fit, x,y,xnew=NULL,weights=FALSE){
 
 knn_radius_fit = function(x,y,args=list(distance=10)){
   data <- data.frame(y = as.factor(y), x)
-  model = do.call( train.kknn ,c(list(formula = y ~ ., data = data), args))
+  model = do.call(train.kknn ,c(list(formula = y ~ ., data = data), args))
   model
 }
 
 predict.knn_radius_fit = function(knn_radius_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   xnew = as.data.frame(xnew)
   fit = predict(knn_radius_fit, newdata = xnew, type='prob')
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
 }
 
 #model = knn_radius_fit(x = as.matrix(X_training), y = as.factor(W_training), args = list(distance=5))
@@ -653,12 +642,11 @@ mlpc_fit = function(x,y,args=list(size=1, maxit=100)){
 predict.mlpc_fit = function(mlpc_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   
   fit = predict(mlpc_fit, newdata=xnew)
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
 }
 
 
@@ -673,15 +661,14 @@ bart_fit = function(x,y,args=list()){
 predict.bart_fit = function(bart_fit, x,y,xnew, weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   
   fit = predict(bart_fit, new_data=as.data.frame(xnew)) 
   fit = as_tibble(fit)
   fit[,2] = 1 - fit[,1]
   colnames(fit) = rev(sort(unique(y)))
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
 }
 
 #model = bart_fit(x = as.matrix(X_training), y = as.factor(W_training))
@@ -699,16 +686,15 @@ ranger_fit = function(x,y,args=list()){
 predict.ranger_fit = function(ranger_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   
   data = as.data.frame(xnew)
   data$y <- as.factor(0)
   
   fit <- predict(ranger_fit, data = data)$predictions 
 
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
 }
 
 #model = ranger_fit(x = as.matrix(X_training), y = W_training)
@@ -725,9 +711,8 @@ multinom_fit = function(x,y,args=list()){
 predict.multinom_fit = function(multinom_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   
   data = as.data.frame(xnew)
   data$y <- as.factor(0)
@@ -737,7 +722,7 @@ predict.multinom_fit = function(multinom_fit, x,y,xnew=NULL,weights=FALSE){
     fit[,2] = 1-fit[,1]
     colnames(fit) = rev(sort(unique(y)))
   }
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
 }
 
 #model = multinom_fit(x = as.matrix(X_training), y = W_training)
@@ -782,9 +767,8 @@ ovo_fit <- function(x, y, classifier = "logit") {
 predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, classifier = "logit") {
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   
   n_classifiers <- length(ovo_fit)
   n_samples <- nrow(xnew)
@@ -828,7 +812,7 @@ predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, classifier = "
   fit <- fit / rowSums(fit)
   
   
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
   
 }
 
@@ -859,9 +843,8 @@ ovr_fit <- function(x, y, classifier = "logit") {
 predict.ovr_fit <- function(ovr_fit,x,y, xnew=NULL,weights=FALSE, classifier = "logit") {
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   
   n_classifiers <- length(ovr_fit)
   n_samples <- nrow(xnew)
@@ -890,7 +873,7 @@ predict.ovr_fit <- function(ovr_fit,x,y, xnew=NULL,weights=FALSE, classifier = "
   fit <- fit / rowSums(fit)
   
   
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
   
 }
 
@@ -911,10 +894,9 @@ model_fit = function(x,y,args=list()){
 predict.model_fit = function(model_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
-    w = NULL
+    warning("Weights are not supported for propensity score estimation.")
   }
-  else w = NULL
   
   fit = predict(model_fit, )
-  list("prediction"=fit,"weights"=w)
+  list("prediction"=fit,  "weights"="No weighted representation available.")
 }

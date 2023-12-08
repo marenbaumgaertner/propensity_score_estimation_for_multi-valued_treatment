@@ -11,6 +11,7 @@ output:
 ```{r, message=FALSE, echo=FALSE,warning=FALSE}
 # Import libraries and dataset
 library(knitr)
+library(plyr)
 library(dplyr)
 library(reshape2)
 library(randomForest)
@@ -40,7 +41,6 @@ library(rpart)
 library(grf)
 library(ada)
 library(fastAdaboost)
-library(plyr)
 library(causalDML)
 library(binda)
 library(kknn)
@@ -57,8 +57,8 @@ set.seed(42)
 options(scipen= 999)
 ```
 
-
 # Create binary data
+
 ```{r, warning=FALSE}
 # Set parameters
 n = 3000
@@ -96,6 +96,7 @@ X_test <-     as.matrix(data.frame(X[!split_indices, ]))
 ```
 
 # Train binary classifiers
+
 ```{r, warning=FALSE}
 # List of classifiers
 classifiers <- c(
@@ -141,9 +142,11 @@ for (classifier in classifiers) {
 
 
 ```
+
 # Evaluation
 
 ## Brier Score
+
 ```{r, message=FALSE, echo=FALSE}
 brier_scores <- sapply(results_binary, function(result) result$brier_score)
 
@@ -155,6 +158,7 @@ kable(results_df, caption = "Brier Scores for Classifiers")
 ```
 
 ## Calibration plots
+
 ```{r}
 make_calibtation_plot(results_binary$adaboost$predictions, as_tibble(W_test), "adaboost")
 make_calibtation_plot(results_binary$bagging$predictions, as_tibble(W_test), "bagging")
@@ -174,7 +178,9 @@ make_calibtation_plot(results_binary$qda$predictions, as_tibble(W_test), "QDA")
 make_calibtation_plot(results_binary$svm$predictions, as_tibble(W_test), "SVM")
 make_calibtation_plot(results_binary$xgboost$predictions, as_tibble(W_test), "XGBoost")
 ```
+
 # Create multi-valued data
+
 ```{r}
 n=2000
 K=4
@@ -206,13 +212,14 @@ X_test <-     as.matrix(data.frame(X[!split_indices, ]))
 ```
 
 # Train multi-valued classifier
+
 ```{r}
 # List of classifiers
 classifiers <- c(
-  "bagging", "boosting", "knn",
-  "knn_radius", "lda", "logit",
-  "mlpc", "multinom", "nb_bernulli", "nb_gaussian", "ovo",
-  "probability_forest", "qda", "ranger", "svm", "xgboost"
+  "bagging", "knn",
+  "knn_radius", "lda",
+  "mlpc", "nb_bernulli", "nb_gaussian", "ovo",
+  "probability_forest", "qda", "ranger", "xgboost"
 )
 
 # Initialize a list to store results
@@ -254,7 +261,9 @@ for (classifier in classifiers) {
 ```
 
 # Evaluation
+
 ## Brier Score
+
 ```{r, message=FALSE, echo=FALSE}
 brier_scores <- sapply(results, function(result) result$brier_score)
 
@@ -264,7 +273,9 @@ results_df <- data.frame(Classifier = c("uniform", classifiers), Brier_Score = b
 # Display the table using kable
 kable(results_df, caption = "Brier Scores for Classifiers")
 ```
+
 ## Calibration plots
+
 ```{r}
 make_calibtation_plot(results$bagging$predictions, as_tibble(W_test), "bagging")
 make_calibtation_plot(results$boosting$predictions, as_tibble(W_test), "boosting")
@@ -282,6 +293,7 @@ make_calibtation_plot(results$xgboost$predictions, as_tibble(W_test), "XGBoost")
 ```
 
 # Train multi-valued classifier using OvO
+
 ```{r}
 
 # List of classifiers
@@ -326,6 +338,7 @@ for (classifier in classifiers) {
 ```
 
 ## Brier Score
+
 ```{r, message=FALSE, echo=FALSE}
 brier_scores <- sapply(results_ovo, function(result) result$brier_score)
 
@@ -335,7 +348,9 @@ results_df <- data.frame(Classifier = classifiers, Brier_Score = brier_scores) %
 # Display the table using kable
 kable(results_df, caption = "Brier Scores for Classifiers")
 ```
+
 ## Calibration plots
+
 ```{r}
 make_calibtation_plot(results_ovo$adaboost$predictions, as_tibble(W_test), "adaboost")
 make_calibtation_plot(results_ovo$bagging$predictions, as_tibble(W_test), "bagging")
@@ -355,7 +370,9 @@ make_calibtation_plot(results_ovo$qda$predictions, as_tibble(W_test), "QDA")
 make_calibtation_plot(results_ovo$svm$predictions, as_tibble(W_test), "SVM")
 make_calibtation_plot(results_ovo$xgboost$predictions, as_tibble(W_test), "XGBoost")
 ```
+
 # Train multi-valued classifier using OvR
+
 ```{r}
 
 # List of classifiers
@@ -401,6 +418,7 @@ for (classifier in classifiers) {
 ```
 
 ## Brier Score
+
 ```{r, message=FALSE, echo=FALSE}
 brier_scores <- sapply(results_ovr, function(result) result$brier_score)
 
@@ -410,7 +428,9 @@ results_df <- data.frame(Classifier = classifiers, Brier_Score = brier_scores) %
 # Display the table using kable
 kable(results_df, caption = "Brier Scores for Classifiers")
 ```
+
 ## Calibration plots
+
 ```{r}
 make_calibtation_plot(results_ovr$adaboost$predictions, as_tibble(W_test), "adaboost")
 make_calibtation_plot(results_ovr$bagging$predictions, as_tibble(W_test), "bagging")
@@ -429,4 +449,146 @@ make_calibtation_plot(results_ovr$ranger$predictions, as_tibble(W_test), "Ranger
 make_calibtation_plot(results_ovr$qda$predictions, as_tibble(W_test), "QDA")
 make_calibtation_plot(results_ovr$svm$predictions, as_tibble(W_test), "SVM")
 make_calibtation_plot(results_ovr$xgboost$predictions, as_tibble(W_test), "XGBoost")
+```
+
+```{r}
+# Define the negative log-likelihood function
+neg_log_likelihood <- function(p, q_hat) {
+  # Check for non-finite values in the vector 'p'
+  if (any(!is.finite(p))) {
+    return(Inf)
+  }
+  
+  # Calculate negative log-likelihood
+  sum(q_hat * log(q_hat / p))
+}
+
+# Given matrix of pairwise probabilities
+q_matrix <- matrix(c(NA, 0.9, 0.4, 0.1, NA, 0.7, 0.6, 0.3, NA), nrow = 3, byrow = TRUE)
+
+# Optimization: Find p that minimizes negative log-likelihood
+result <- optim(par = c(0.33, 0.33, 0.33), fn = neg_log_likelihood(q_hat = q_matrix, p=par), method = "L-BFGS-B")
+
+# Extract the optimized probabilities
+optimized_p <- result$par
+
+print(optimized_p)
+
+```
+
+```{r}
+# Define the negative log-likelihood function
+neg_log_likelihood <- function(p, q_hat) {
+   p_mat <- matrix(p, nrow = length(p), ncol = length(p))
+  ll <- -sum(q_hat * log(q_hat /p_mat))
+}
+
+# Given matrix of pairwise probabilities
+q_matrix <- matrix(c(0.1, 0.9, 0.4, 0.1, 0.1, 0.7, 0.6, 0.3, 0.1), nrow = 3, byrow = TRUE)
+
+# Optimization: Find p that minimizes negative log-likelihood
+result <- optim(par = c(0.33, 0.33, 0.33), 
+                fn = neg_log_likelihood, 
+                q_hat = q_matrix,
+                method = "L-BFGS-B")
+
+
+# Extract the optimized probabilities
+optimized_p <- result$par
+
+print(optimized_p)
+
+```
+
+```{r}
+# Define the negative log-likelihood function
+neg_log_likelihood <- function(p, q_hat) {
+  # Exclude NA values from the calculation
+  valid_indices <- is.finite(q_hat) & is.finite(p)
+  -sum(q_hat[valid_indices] * log(q_hat[valid_indices] / p[valid_indices]))
+}
+
+# Given matrix of pairwise probabilities
+q_matrix <- matrix(c(NA, 0.9, 0.4, 0.1, NA, 0.7, 0.6, 0.3, NA), nrow = 3, byrow = TRUE)
+
+# Optimization: Find p that minimizes negative log-likelihood
+result <- optim(par = c(0.50, 0.25, 0.25), fn = neg_log_likelihood, NULL, q_hat = q_matrix, method = "CG")
+
+# Extract the optimized probabilities
+optimized_p <- result$par
+
+print(optimized_p)
+
+neg_log_likelihood(0.5, 0.9)
+
+```
+
+```{r}
+# Define the negative log-likelihood function
+neg_log_likelihood <- function(q_hat, p) {
+  # Reshape p to a matrix for element-wise operations
+  p_matrix <- matrix(p, nrow = nrow(q_hat), ncol = ncol(q_hat), byrow = TRUE)
+  
+  # Avoid log(0) issues by replacing 0 with a small value
+  p_matrix[p_matrix == 0] <- 1e-10
+  
+  # Calculate the negative log-likelihood
+  ll <- -sum(q_hat * log(q_hat / p_matrix))
+  if(is.na(ll)) ll <- 0
+  
+  return(ll)
+}
+
+# Given matrix of pairwise probabilities
+q_matrix <- matrix(c(NA, 0.9, 0.4, 0.1, NA, 0.7, 0.6, 0.3, NA), nrow = 3, byrow = TRUE)
+
+# Optimization: Find p that minimizes negative log-likelihood
+result <- optim(par = c(0.33, 0.33, 0.33), 
+                fn = neg_log_likelihood, 
+                q_hat = q_matrix, 
+                method = "L-BFGS-B")
+
+# Extract the optimized probabilities
+optimized_p <- result$par
+
+# Print the optimized probabilities
+print(optimized_p)
+
+```
+
+```{r}
+# Define the negative log-likelihood function
+neg_log_likelihood <- function(p, q_hat) {
+  p_matrix <- matrix(p, nrow = dim(q_hat)[1], ncol = dim(q_hat)[2], byrow = TRUE)
+  
+  # Exclude NA values from the calculations
+  valid_entries <- !is.na(q_hat)
+  
+  # Calculate the negative log-likelihood only for valid entries
+  ll <- -sum(q_hat[valid_entries] * log(q_hat[valid_entries] / p_matrix[valid_entries]))
+ 
+  
+  return(ll)
+}
+
+# Given matrix of pairwise probabilities
+q_matrix <- matrix(c(NA, 0.9, 0.4, 0.1, NA, 0.7, 0.6, 0.3, NA), nrow = 3, byrow = TRUE)
+
+
+# Optimization: Find p that minimizes negative log-likelihood
+result <- optim(par = c(0.33, 0.33, 0.33), 
+                fn = neg_log_likelihood, 
+                q_hat = q_matrix, 
+                method = "BFGS",
+                lower = rep(1e-6, length(par)), 
+                upper = rep(1e-6, length(par)))
+
+# Extract the optimized probabilities
+optimized_p <- result$par
+
+# Print the optimized probabilities
+print(optimized_p)
+
+neg_log_likelihood(p=p_matrix, q_hat = q_matrix)
+
 ```
