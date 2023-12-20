@@ -121,7 +121,70 @@ make_calibtation_plot <- function(probabilities, outcome, method) {
 }
 
 
-
+finetuning_soft_classifier <- function(x, y, method, iter = 10){
+  #library(method$library) # install and load package
+  
+  if (is.null(method$grid)) {
+    stop("Error: No grid defined")
+  }
+  if (is.null(method$fit)) {
+    stop("Error: No fit function defined")
+  }
+  if (is.null(method$predict)) {
+    stop("Error: No predict function defined")
+  }
+  
+  set.seed(42)
+  grids <- nrow(grid)
+  
+  # initialize empty matrix for resulting Brier Score
+  bs_mat <- grid
+  bs_mat$BS <- NA
+  
+  # bind input data
+  dataset <- data.frame(y = y, x = x)
+  
+  for (i in 1:grids) {
+    params <- list()
+    # Store tuning parameters
+    for (col_name in colnames(grid)) {
+      params[[col_name]] <- grid[[col_name]][i]
+    }
+    bs_iter <- array(0, dim=iter)
+    for (j in 1:iter) {
+      # create new split for each iteration
+      split_indices <- sample.split(dataset$y, SplitRatio = 0.8)
+      training_data <- dataset[split_indices,]
+      test_data <- dataset[!split_indices,]
+      
+      y_training <- as.matrix(data.frame(y = training_data$y))
+      x_training <- as.matrix(data.frame(x[split_indices,]))
+      y_validation <- as.matrix(data.frame(y = test_data$y))
+      x_validation <- as.matrix(data.frame(x[!split_indices,]))
+      
+      # hier Platz für eine cross-validation 
+      #for (f in folds){
+        
+      #}
+      #fit <- do.call(method$fit, c(list(X_training, W_training), params))
+      #pred <- method$predict(fit, X_test, W_test)
+      #bs_iter[j] <- brier_score(probabilities = pred, outcome = W_test)
+      fit <- do.call(method$fit, c(list(x_training,y_training), params))
+      pred <- method$predict(fit, x_validation, y_validation)
+      bs_iter[j] <- brier_score(probabilities = pred, outcome = y_validation)
+      
+      
+    }
+    # only store average over iterations
+    bs_mat[i, 'BS'] <- mean(bs_iter)
+  }
+  
+  best_params <- bs_mat[which.min(bs_mat$BS), ]
+  
+  
+  list('performance_mat' = bs_mat,
+       'best_params' = best_params)
+}
 
 #true_outcome <- class.ind(W_test) %>% as_tibble()
 #probabilities <- results$bagging$predictions
