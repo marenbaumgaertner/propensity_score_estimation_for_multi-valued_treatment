@@ -9,44 +9,7 @@ output:
 ---
 
 ```{r, message=FALSE, echo=FALSE,warning=FALSE}
-# Import libraries and dataset
-library(knitr)
-library(plyr)
-library(dplyr)
-library(reshape2)
-library(randomForest)
-library(ggplot2)
-library(caTools)
-library(mlogit)
-library(nnet)
-library(caret)
-library(glmnet)
-library(naivebayes)
-library(rpart)
-library(randomForest)
-library(MASS)
-library(FNN)
-library(e1071)
-library(igraph)
-library(caret)
-library(sparklyr)
-library(RSSL)
-library(sgd)
-library(MASS)
-library(hdm)
-library(predtools)
-library(xgboost)
-library(adabag)
-library(rpart)
-library(grf)
-library(ada)
-library(fastAdaboost)
-library(causalDML)
-library(binda)
-library(kknn)
-library(calibrate)
-library(bartMachine)
-library(ranger)
+source("packages.R")
 ```
 
 ```{r}
@@ -61,10 +24,12 @@ Define inherently multi-valued classifieres
 
 ```{r}
 classifiers <- c(
-  "bagging", "knn", "knn_radius", "lda", "logit",
+  "knn", "knn_radius", "lda", "logit",
   "mlpc", "multinom", "nb_bernulli", "nb_gaussian",
   "probability_forest", "qda", "ranger", "xgboost"
 )
+
+classifiers_to_tune <- classifiers[!(classifiers %in% c("lda", "qda"))]
 ```
 
 # Create multi-valued train data
@@ -110,6 +75,27 @@ X_test <-     as.matrix(data.frame(X[!split_indices, ]))
 
 # Define methods
 
+For each classifier I create a list which contains information on the classifier:
+
+1.  Method Type:\
+    Define for which type of problem the method is suitable. In my case it is all classification, right now this information is not used by the `finetuning_soft_classifier()` function, but as most of these methods are also able to do regession tasks it may be useful later on.
+
+2.  Library Selection:
+
+    Define the package the methods is using such that the correct package can be loaded by the `finetuning_soft_classifier()` function
+
+3.  Parameters:
+
+    The parameters argument contains a table of all used tuning parameters for the model. It contains information on the name of the input argument of the function, whether it is numeric or a character, and a definition of what the tuning parameter is doing.
+
+4.  Fitting and Prediction Functions:
+
+    Next, I define the corresponding `_fit()` and `predict.()` function.
+
+5.  Tuning Grid:
+
+    Lastly, I define the tuning grid for tuning parameter optimization. This grid allows the algorithm to find the optimal combination of parameters that results in the best model performance.
+
 ## 1. Multinomial logistic regression (glmnet)
 
 -   alpha: Mixing Percentage
@@ -131,10 +117,6 @@ multinomial_logit$predict <- predict.logit_fit
 # design the parameter tuning grid
 multinomial_logit$grid <- expand.grid(alpha = seq(0,1,0.5),
                     lambda = seq(0,1,0.5))
-
-
-#test_model <- multinomial_logit$fit(X_training,W_training, alpha=0, lambda=0)
-#test_pred <- multinomial_logit$predict(test_model, x=X_test, y=W_test)
 ```
 
 ## 2. Multinomial logistic regression (nnet)
@@ -184,9 +166,6 @@ knn$predict <- predict.knn_fit
 knn$grid <- expand.grid(kmax = seq(5,30,10),
                         #distance = seq(1,5,1),
                         kernel = c("rectangular", "gaussian", "optimal"))
-
-#test_model <- knn$fit(X_training,W_training, kmax=5, distance=1, kernel = "rectangular")
-#test_pred <- knn$predict(test_model, x=X_test, y=W_test)
 ```
 
 ## 4. kNN (Radius)
@@ -205,9 +184,6 @@ knn_radius$predict <- predict.knn_fit
 knn_radius_grid <- expand.grid(distance = seq(1,5,1),
                         kernel = c("rectangular", "gaussian", "optimal"))
 knn_radius$grid <- knn_radius_grid
-
-#test_model <- knn_radius$fit(X_training,W_training, distance=1, kernel = "rectangular")
-#test_pred <- knn_radius$predict(test_model, x=X_test, y=W_test)
 ```
 
 ## 5. Naive Bayes (Bernulli)
@@ -304,23 +280,29 @@ mlpc <- list(
   params = data.frame(parameter = c("size"), class = c("numeric"), label = c("number of hidden layers")),
   fit = mlpc_fit,
   predict = predict.mlpc_fit,
-  grid = expand.grid()
+  grid = expand.grid(size=seq(1,3,1))
 )
 ```
 
 ## 10. xgboost
 
--   
+-   eta: learning rate
+-   gamma: minimum loss reduction required for a split
+-   nrounds: \# of boosting iterations
+-   min_child_weight: minimum sum of instance weight (hessian) needed in a child
 
 ```{r}
 xgboost <- list(
   type = "Classification",
   library = "xgboost",
   multiclass = TRUE,
-  params = data.frame(parameter = c(""), class = c(""), label = c("")),
+  params = data.frame(parameter = c("eta", "gamma", "nrounds", "min_child_weight"), class = c("numeric", "numeric", "numeric", "numeric"), label = c("learning rate", "minimun loss reduction required for split", "# of boosting iterations", "minimum sum of instance weight (hessian) needed in a child")),
   fit = xgboost_fit,
   predict = predict.xgboost_fit,
-  grid = expand.grid()
+  grid = expand.grid(eta = seq(0.1,0.5,0.1),
+                     gamma = seq(0,1,0.2),
+                     nround = seq(5, 100, 10),
+                     min_child_weight = seq(0,2,0.5))
 )
 ```
 
@@ -328,22 +310,36 @@ xgboost <- list(
 
 To adapt in ml_wrapper: - fit: add ... in function arg - predict: just return fit
 
-```{r}
-best_logit <- finetuning_soft_classifier(x=X, y = W, method = multinomial_logit)
+This function, **`finetuning_soft_classifier`**, is designed for fine-tuning a soft classifier using a specified method. Here's a concise explanation:
 
-best_logit_nnet <- finetuning_soft_classifier(x=X, y = W, method = multinomial_logit_nnet)
+The function takes input data (**`x`** and **`y`**), a classification method (**`method`**), and an optional number of iterations (**`iter`**). It performs a grid search over the hyperparameter space defined in **`method$grid`** to find the best combination of parameters that minimizes the Brier Score, a metric for assessing the accuracy of probabilistic predictions.
 
-best_knn <- finetuning_soft_classifier(x=X, y = W, method = knn)
+For each grid point, the function splits the data into training and validation sets, fits the model using the specified method and parameters, and computes the Brier Score on the validation set. This process is repeated for a specified number of iterations, and the average Brier Score is recorded.
 
-best_knn_radius <- finetuning_soft_classifier(x=X, y = W, method = knn_radius)
+Finally, the function identifies the set of parameters that resulted in the lowest average Brier Score and returns both the matrix of performance scores (**`bs_mat`**) and the best parameters (**`best_params`**) as output.
 
-best_nb_bernulli <- finetuning_soft_classifier(x=X, y=W, method = nb_bernulli)
+```{r, message=FALSE}
+best_logit <- finetuning_soft_classifier(x=X_training, y=W_training, method=multinomial_logit)
 
-best_nb_gaussian <- finetuning_soft_classifier(x=X, y=W, method = nb_gaussian)
+best_logit_nnet <- finetuning_soft_classifier(x=X_training, y=W_training, method=multinomial_logit_nnet)
 
-best_probability_forest_grf <- finetuning_soft_classifier(x=X,y=W, method = probability_forest_grf)
+best_knn <- finetuning_soft_classifier(x=X_training, y=W_training, method=knn)
+
+best_knn_radius <- finetuning_soft_classifier(x=X_training, y=W_training, method=knn_radius)
+
+best_nb_bernulli <- finetuning_soft_classifier(x=X_training, y=W_training, method=nb_bernulli)
+
+best_nb_gaussian <- finetuning_soft_classifier(x=X_training, y=W_training, method=nb_gaussian)
+
+best_probability_forest_grf <- finetuning_soft_classifier(x=X_training,y=W_training, method=probability_forest_grf)
+
+best_probability_forest_ranger <- finetuning_soft_classifier(x=X_training, y=W_training, method=probability_forest_ranger)
+
+best_mlpc <- finetuning_soft_classifier(x=X_training, y=W_training, method=mlpc)
+
+best_xgboost <- finetuning_soft_classifier(x=X_training, y=W_training, method=xgboost)
 ```
 
 ```{r}
-best_knn$best_params
+best_mlpc$best_params
 ```

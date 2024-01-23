@@ -291,31 +291,60 @@ predict.lasso_fit = function(lasso_fit,x,y,xnew=NULL,weights=FALSE) {
 }
 
 
-logit_fit = function(x,y,args=list(alpha = 0.5)){
+
+# this function cv.glmnet seem not to work in gris search caret
+#logit_fit = function(x,y,args=list(alpha = 0.5)){
+#  if (length(unique(y))==2){
+#    logit = do.call(cv.glmnet, c(list(x=x,y=y, family = "binomial", type.measure = "class"),args))
+#  }else{
+#    logit = do.call(cv.glmnet, c(list(x=x,y=y, family = "multinomial", type.measure = "class"),args))
+#  }
+#  logit
+#}
+#
+#predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE){
+#  if (is.null(xnew)) xnew = x
+#  
+#  if (weights==TRUE) {
+#    warning("Weights are not supported for propensity score estimation.")
+#  }
+#
+#  
+#  fit = predict(logit_fit, newx=xnew, s = "lambda.min", type = "response") %>% as_tibble()
+#  if (length(logit_fit$glmnet.fit$classnames)==2){
+#    fit[,2] = 1 - fit[,1]
+#    colnames(fit) = rev(logit_fit$glmnet.fit$classnames)
+#    
+#  }
+#  
+#  list("prediction"=fit, "weights"="No weighted representation available.")
+#}
+
+
+
+logit_fit = function(x,y,...){
   if (length(unique(y))==2){
-    logit = do.call(cv.glmnet, c(list(x=x,y=y, family = "binomial", type.measure = "class"),args))
+    logit = do.call(glmnet, c(list(x=x,y=y, family = "binomial", type.measure = "class"),...))
   }else{
-    logit = do.call(cv.glmnet, c(list(x=x,y=y, family = "multinomial", type.measure = "class"),args))
+    logit = do.call(glmnet, c(list(x=x,y=y, family = "multinomial", type.measure = "class"),...))
   }
   logit
 }
-
-predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE){
+predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE,...){
   if (is.null(xnew)) xnew = x
   
   if (weights==TRUE) {
     warning("Weights are not supported for propensity score estimation.")
   }
-
   
-  fit = predict(logit_fit, newx=xnew, s = "lambda.min", type = "response") %>% as_tibble()
+  
+  fit = predict(logit_fit, newx=xnew, s = "lambda.min", type = "response",...) %>% as_tibble()
   if (length(logit_fit$glmnet.fit$classnames)==2){
     fit[,2] = 1 - fit[,1]
     colnames(fit) = rev(logit_fit$glmnet.fit$classnames)
-    
   }
   
-  list("prediction"=fit, "weights"="No weighted representation available.")
+  fit
 }
 
 
@@ -326,9 +355,9 @@ predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE){
 
 
 
-nb_gaussian_fit = function(x,y,args=list()){
+nb_gaussian_fit = function(x,y,...){
   y = as.factor(y)
-  model = do.call(gaussian_naive_bayes, c(list(x=x,y=y),args))
+  model = do.call(gaussian_naive_bayes, c(list(x=x,y=y),...))
   model
 }
 
@@ -339,12 +368,13 @@ predict.nb_gaussian_fit = function(nb_gaussian_fit,x,y,xnew=NULL,weights=FALSE){
   }
   
   fit = predict(nb_gaussian_fit, newdata=xnew, type = "prob")
-  list("prediction"=fit,  "weights"="No weighted representation available.")
+  #list("prediction"=fit,  "weights"="No weighted representation available.")
+  fit
 }
 
-nb_bernulli_fit = function(x,y,args=list()){
+nb_bernulli_fit = function(x,y,...){
   y = as.factor(y)
-  model = do.call(bernoulli_naive_bayes, c(list(x=x,y=y),args))
+  model = do.call(naive_bayes, c(list(x=x,y=y),...))
   model
 }
 
@@ -355,7 +385,8 @@ predict.nb_bernulli_fit = function(nb_bernulli_fit,x,y,xnew=NULL,weights=FALSE){
   }
   
   fit = predict(nb_bernulli_fit, newdata=xnew, type = "prob")
-  list("prediction"=fit,  "weights"="No weighted representation available.")
+  #list("prediction"=fit,  "weights"="No weighted representation available.")
+  fit
 }
 
 
@@ -365,19 +396,35 @@ predict.nb_bernulli_fit = function(nb_bernulli_fit,x,y,xnew=NULL,weights=FALSE){
 
 #10
 
+# seems not to work with the do.call() function
+#xgboost_fit = function(x,y,...){
+#  K = length(unique(y))
+#  if (K==2){
+#     model = do.call(xgboost, c(list(data=x,label=y, nrounds=10, 
+#                                     objective = "binary:logistic", eval_metric = "logloss", max_depth = 5),...))
+#  }else{
+#    y = y-1
+#    model = do.call(xgboost, c(list(data=x,label=y, nrounds=10, num_class = K, objective = "multi:softprob", eval_metric = "mlogloss", max_depth = 5),...))
+#  }
+#  
+#  model
+#}
 
-xgboost_fit = function(x,y,args=list()){
-  K = length(unique(y))
-  if (K==2){
-     model = do.call(xgboost, c(list(data=x,label=y, nrounds=10, 
-                                     objective = "binary:logistic", eval_metric = "logloss", max_depth = 5),args))
-  }else{
-    y = y-1
-    model = do.call(xgboost, c(list(data=x,label=y, nrounds=10, num_class = K, objective = "multi:softprob", eval_metric = "mlogloss", max_depth = 5),args))
+xgboost_fit <- function(x, y, ...) {
+  K <- length(unique(y))
+  
+  if (K == 2) {
+    model <- xgboost(data = x, label = y, nrounds = 10,
+                     objective = "binary:logistic", eval_metric = "logloss", max_depth = 5, ...)
+  } else {
+    y <- y - 1
+    model <- xgboost(data = x, label = y, nrounds = 10, num_class = K,
+                     objective = "multi:softprob", eval_metric = "mlogloss", max_depth = 5, ...)
   }
   
   model
 }
+
 predict.xgboost_fit = function(xgboost_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -398,9 +445,9 @@ predict.xgboost_fit = function(xgboost_fit,x,y,xnew=NULL,weights=FALSE){
     
   }
 
-  list("prediction"=fit,  "weights"="No weighted representation available.")
+  #list("prediction"=fit,  "weights"="No weighted representation available.")
+  fit
 }
-
 
 
 #model = xgboost_fit(as.matrix(X_training), as.matrix(W_training+1))
@@ -475,8 +522,8 @@ predict.qda_fit = function(qda_fit,x,y,xnew=NULL,weights=FALSE){
 #preds <- predict.lda_fit(model[[3]], x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))$prediction
 
 
-probability_forest_fit = function(x,y, args=list()){
-  model = do.call(probability_forest, c(list(X = x, Y = as.factor(y)), args))
+probability_forest_fit = function(x,y,...){
+  model = do.call(probability_forest, c(list(X = x, Y = as.factor(y)), ...))
   model
 }
 
@@ -490,8 +537,8 @@ predict.probability_forest_fit = function(probability_forest_fit, x,y,xnew=NULL,
   else w = NULL
   
   fit = predict(probability_forest_fit, newdata=xnew)$predictions
-  list("prediction"=fit,  "weights"="No weighted representation available.")
-  
+  #list("prediction"=fit,  "weights"="No weighted representation available.")
+  fit
 }
 
 
@@ -593,9 +640,9 @@ predict.adaboost_fit = function(adaboost_fit, x,y,xnew=NULL,weights=FALSE){
 #data = as.data.frame(cbind((W_training), X_training))
 
 # @Maren: kmax depedent on # classes?
-knn_fit = function(x,y,args=list(kmax=10)){
+knn_fit = function(x,y,...){ # args=list(kmax=floor(0.05*nrow(x)))
   data <- data.frame(y = as.factor(y), x)
-  model = do.call(train.kknn ,c(list(formula = y ~ ., data = data), args))
+  model = do.call(train.kknn ,c(list(formula = y ~ ., data = data), ...)) # args
   model
 }
 
@@ -606,7 +653,8 @@ predict.knn_fit = function(knn_fit, x,y,xnew=NULL,weights=FALSE){
   }
   xnew = as.data.frame(xnew)
   fit = predict(knn_fit, newdata = xnew, type='prob')
-  list("prediction"=fit,  "weights"="No weighted representation available.")
+  #list("prediction"=fit,  "weights"="No weighted representation available.")
+  fit
 }
 
 
@@ -634,8 +682,8 @@ predict.knn_radius_fit = function(knn_radius_fit, x,y,xnew=NULL,weights=FALSE){
 #model = knn_radius_fit(x = as.matrix(X_training), y = as.factor(W_training), args = list(distance=5))
 #preds = predict.knn_radius_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
 
-mlpc_fit = function(x,y,args=list(size=1, maxit=100)){
-  model = do.call(nnet ,c(list(x=x, y = class.ind(y), softmax = TRUE, lineout=TRUE), args))
+mlpc_fit = function(x,y,...){
+  model = do.call(nnet ,c(list(x=x, y = class.ind(y), softmax = TRUE, lineout=TRUE), ...))
   model
 }
 
@@ -646,7 +694,8 @@ predict.mlpc_fit = function(mlpc_fit, x,y,xnew=NULL,weights=FALSE){
   }
   
   fit = predict(mlpc_fit, newdata=xnew)
-  list("prediction"=fit,  "weights"="No weighted representation available.")
+  #list("prediction"=fit,  "weights"="No weighted representation available.")
+  fit
 }
 
 
@@ -676,12 +725,14 @@ predict.bart_fit = function(bart_fit, x,y,xnew, weights=FALSE){
 
 
 
-ranger_fit = function(x,y,args=list()){
+
+ranger_fit = function(x,y,...){ #args=list(min.node.size=0.1*nrow(x), mtry=ceiling(sqrt(ncol(x))))
   data <- data.frame(y = as.factor(y), x)
-  
-  model = do.call(ranger, c(list(data=data, formula= y~., probability=TRUE), args))
+
+  model = do.call(ranger, c(list(data=data, formula= y~., probability=TRUE), ...))
   model
 }
+
 
 predict.ranger_fit = function(ranger_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
@@ -694,7 +745,8 @@ predict.ranger_fit = function(ranger_fit, x,y,xnew=NULL,weights=FALSE){
   
   fit <- predict(ranger_fit, data = data)$predictions 
 
-  list("prediction"=fit,  "weights"="No weighted representation available.")
+  #list("prediction"=fit,  "weights"="No weighted representation available.")
+  fit
 }
 
 #model = ranger_fit(x = as.matrix(X_training), y = W_training)

@@ -135,6 +135,7 @@ finetuning_soft_classifier <- function(x, y, method, iter = 10){
   }
   
   set.seed(42)
+  grid <- method$grid
   grids <- nrow(grid)
   
   # initialize empty matrix for resulting Brier Score
@@ -147,8 +148,12 @@ finetuning_soft_classifier <- function(x, y, method, iter = 10){
   for (i in 1:grids) {
     params <- list()
     # Store tuning parameters
-    for (col_name in colnames(grid)) {
-      params[[col_name]] <- grid[[col_name]][i]
+    for (col_name in colnames(method$grid)) {
+      if (is.factor(method$grid[[col_name]])) {
+        params[[col_name]] <- as.character(method$grid[[col_name]][i])
+      } else {
+        params[[col_name]] <- method$grid[[col_name]][i]
+      }
     }
     bs_iter <- array(0, dim=iter)
     for (j in 1:iter) {
