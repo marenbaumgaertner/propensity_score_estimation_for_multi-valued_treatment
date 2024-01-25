@@ -875,60 +875,6 @@ predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, classifier = "
 }
 
 
-predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, ) {
-  if (is.null(xnew)) xnew = x
-  if (weights==TRUE) {
-    warning("Weights are not supported for propensity score estimation.")
-  }
-  
-  n_classifiers <- length(ovo_fit)
-  n_samples <- nrow(xnew)
-  n_classes <- length(unique(unlist(strsplit(names(ovo_fit), "_"))))
-  
-  # Initialize an empty matrix to store the probabilities
-  fit <- matrix(0, nrow = n_samples, ncol = n_classes) %>% as_tibble()
-  colnames(fit) <- unique(unlist(strsplit(names(ovo_fit), "_")))
-  
-  pred_bin <- list()
-  
-  for (i in 1:n_classifiers) {
-    # Extract class names from the binary classifier name
-    class_names <- unlist(strsplit(names(ovo_fit)[[i]], "_"))
-    class_i <- class_names[1]
-    class_j <- class_names[2]
-    subset_y <- y[y %in% c(class_i, class_j)]
-    #print(paste0("classifier ", i))
-    
-    # Predict probabilities using the i-th binary classifier
-    fit_raw <- do.call(paste0("predict.", classifier,  "_fit"), 
-                       list(ovo_fit[[i]], x=x, y=subset_y, xnew = xnew))
-    
-    
-    # Compute probabilities for second class if not provided by default
-    # @Maren: check how to add correct colnames
-    fit_raw = fit_raw %>% as_tibble()
-    if (ncol(fit_raw==1)){
-      fit_raw[,2] <- 1 - fit_raw[,1]
-    }
-    if (!(all(class_names %in% colnames(fit_raw)))) {
-      colnames(fit_raw) <- class_names
-    }
-    
-    
-    # Update the corresponding columns in e_hat
-    fit[, `class_i`] <- fit[, `class_i`] + fit_raw[, `class_i`]
-    fit[, `class_j`] <- fit[, `class_j`] + fit_raw[, `class_j`]
-  }
-  
-  # Normalize the probabilities to sum up to 1 for each sample
-  ##@Maren: research
-  #fit <- fit / rowSums(fit)
-  
-  
-  #list("prediction"=fit,  "weights"="No weighted representation available.")
-  fit
-}
-
 predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, classifier = "logit") {
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
