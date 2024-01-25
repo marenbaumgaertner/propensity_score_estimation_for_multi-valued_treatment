@@ -338,7 +338,14 @@ best_probability_forest_ranger <- finetuning_soft_classifier(x=X_training, y=W_t
 best_mlpc <- finetuning_soft_classifier(x=X_training, y=W_training, method=mlpc)
 
 best_xgboost <- finetuning_soft_classifier(x=X_training, y=W_training, method=xgboost)
+
 ```
+
+```{r}
+best_knn <- finetuning_soft_classifier(x=X, y=W, method=knn)
+best_knn$best_params
+```
+
 
 ```{r}
 best_mlpc$best_params

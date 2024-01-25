@@ -337,8 +337,8 @@ predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE,...){
     warning("Weights are not supported for propensity score estimation.")
   }
   
-  
-  fit = predict(logit_fit, newx=xnew, s = "lambda.min", type = "response",...) %>% as_tibble()
+  lambda = min(logit_fit$lambda)
+  fit = predict(logit_fit, newx=xnew, s = lambda, type = "response",...) %>% as_tibble()
   if (length(logit_fit$glmnet.fit$classnames)==2){
     fit[,2] = 1 - fit[,1]
     colnames(fit) = rev(logit_fit$glmnet.fit$classnames)
@@ -415,11 +415,11 @@ xgboost_fit <- function(x, y, ...) {
   
   if (K == 2) {
     model <- xgboost(data = x, label = y, nrounds = 10,
-                     objective = "binary:logistic", eval_metric = "logloss", max_depth = 5, ...)
+                     objective = "binary:logistic", eval_metric = "logloss", max_depth = 5, verbose=0, ...)
   } else {
     y <- y - 1
     model <- xgboost(data = x, label = y, nrounds = 10, num_class = K,
-                     objective = "multi:softprob", eval_metric = "mlogloss", max_depth = 5, ...)
+                     objective = "multi:softprob", eval_metric = "mlogloss", max_depth = 5, verbose=0, ...)
   }
   
   model
@@ -493,9 +493,10 @@ predict.lda_fit = function(lda_fit,x,y,xnew=NULL,weights=FALSE){
   if (weights==TRUE) {
     warning("Weights are not supported for propensity score estimation.")
   }
-  fit <- predict(lda_fit, X_test, type="prob")$posterior # @Maren: remove type and retry :)
-  list("prediction"=fit,  "weights"="No weighted representation available.")
+  fit <- predict(lda_fit, xnew, type="prob")$posterior # @Maren: remove type and retry :)
   
+  #list("prediction"=fit,  "weights"="No weighted representation available.")
+  fit
 }
 
 
@@ -512,9 +513,9 @@ predict.qda_fit = function(qda_fit,x,y,xnew=NULL,weights=FALSE){
     warning("Weights are not supported for propensity score estimation.")
   }
   
-  fit <- predict(qda_fit, X_test, type="prob")$posterior
-  list("prediction"=fit,  "weights"="No weighted representation available.")
-  
+  fit <- predict(qda_fit, xnew, type="prob")$posterior
+  #list("prediction"=fit,  "weights"="No weighted representation available.")
+  fit
 }
 
 
@@ -676,14 +677,18 @@ predict.knn_radius_fit = function(knn_radius_fit, x,y,xnew=NULL,weights=FALSE){
   }
   xnew = as.data.frame(xnew)
   fit = predict(knn_radius_fit, newdata = xnew, type='prob')
-  list("prediction"=fit,  "weights"="No weighted representation available.")
+  #list("prediction"=fit,  "weights"="No weighted representation available.")
+  fit
 }
 
 #model = knn_radius_fit(x = as.matrix(X_training), y = as.factor(W_training), args = list(distance=5))
 #preds = predict.knn_radius_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
 
 mlpc_fit = function(x,y,...){
-  model = do.call(nnet ,c(list(x=x, y = class.ind(y), softmax = TRUE, lineout=TRUE), ...))
+  #if(is.null(size)) size=1
+  model = do.call(nnet ,c(list(x=x, y = class.ind(y), softmax = TRUE, lineout=TRUE), size=1))
+  
+  #model = do.call(nnet ,c(list(x=x, y = class.ind(y), softmax = TRUE, lineout=TRUE), ...))
   model
 }
 
@@ -774,7 +779,8 @@ predict.multinom_fit = function(multinom_fit, x,y,xnew=NULL,weights=FALSE){
     fit[,2] = 1-fit[,1]
     colnames(fit) = rev(sort(unique(y)))
   }
-  list("prediction"=fit,  "weights"="No weighted representation available.")
+  #list("prediction"=fit,  "weights"="No weighted representation available.")
+  fit
 }
 
 #model = multinom_fit(x = as.matrix(X_training), y = W_training)
