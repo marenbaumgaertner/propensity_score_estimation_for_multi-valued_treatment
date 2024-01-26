@@ -120,6 +120,28 @@ make_calibtation_plot <- function(probabilities, outcome, method) {
   return(plot)
 }
 
+kl_divergence <- function(p, q_matrix) {
+  epsilon <- 1e-10
+  p <- p / sum(p) # Normalize p to sum to 1
+  K <- length(p)
+  total_divergence <- 0
+  
+  for (i in 1:(K-1)) {
+    for (j in (i+1):K) {
+      u_ij <- p[i] / (p[i] + p[j] + epsilon)
+      r_ij <- q_matrix[i, j]
+      
+      if (!is.na(r_ij)) {
+        total_divergence <- total_divergence + 
+          r_ij * log((r_ij + epsilon) / (u_ij + epsilon)) + 
+          (1 - r_ij) * log(((1 - r_ij) + epsilon) / ((1 - u_ij) + epsilon)) 
+      }
+    }
+  }
+  
+  return(total_divergence)
+}
+
 
 finetuning_soft_classifier <- function(x, y, method, iter = 10, n_folds=5){
   #library(method$library) # install and load package
@@ -168,7 +190,9 @@ finetuning_soft_classifier <- function(x, y, method, iter = 10, n_folds=5){
       for (f in 1:n_folds){
         
         # fit model 
-        model <- do.call(method$fit, list(x = X[fold != f,], y = W[fold != f]))
+        model <- do.call(method$fit, list(x = X[fold != f,], y = W[fold != f], params))
+        #print(paste0("Model param lambda = ", model$lambda))
+        #print(paste0("Grid param lambda = ", params$lambda))
         
         # predict
         predictions[fold == f,] <- do.call(method$predict,
