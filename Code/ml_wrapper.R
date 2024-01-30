@@ -291,10 +291,23 @@ predict.lasso_fit = function(lasso_fit,x,y,xnew=NULL,weights=FALSE) {
 }
 
 
+################################################################################
+################################################################################
+############ Hier fangen meine Funktionen an ###################################
+################################################################################
+################################################################################
 
 
 
-
+#' This function calculates the (multinomial) logistic regression based on the \code{\link{glmnet}} package 
+#'
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param args List of arguments passed to  \code{\link{glmnet}}
+#' @import glmnet
+#'
+#' @return An object with S3 class "glmnet"
+#'
 logit_fit = function(x,y,args=list()){
   if (length(unique(y))==2){
     logit = do.call(glmnet, c(list(x=x,y=y, family = "binomial", type.measure = "class"),args))
@@ -304,15 +317,20 @@ logit_fit = function(x,y,args=list()){
   logit
 }
 
-# works with paring args using c(params)
-#logit_fit = function(x,y,...){
-#  if (length(unique(y))==2){
-#    logit = do.call(glmnet, c(list(x=x,y=y, family = "binomial", type.measure = "class"),...))
-#  }else{
-#    logit = do.call(glmnet, c(list(x=x,y=y, family = "multinomial", type.measure = "class"),...))
-#  }
-#  logit
-#}
+
+#' Prediction based on (multinomial) logistic regression.
+#' @param logit_fit Output of \code{\link{glmnet}} or \code{\link{logit_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE as
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   
@@ -331,26 +349,34 @@ predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE){
 }
 
 
-
-#model = logit_fit(as.matrix(X_training), as.matrix(W_training+1))
-#preds = predict.logit_fit(model, as.matrix(X_training), as.matrix(W_training), xnew=as.matrix(X_test))$prediction
-#
-
-# fit model 
-#model <- do.call(method$fit, list(x = X[fold != f,], y = W[fold != f], args=list(lambda=0.5)))
-
-#model <- do.call(method$fit, list(x = X[fold != f,], y = W[fold != f], c(params)))
-
-#model <- do.call(method$fit, list(x = X[fold != f,], y = W[fold != f], params))
-
-
-
+#' This function calculates the Gaussian Naive Bayes model based on the \code{\link{naivebayes}} package 
+#'
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param args List of arguments passed to  \code{\link{naivebayes}}
+#' @import naivebayes
+#'
+#' @return An object with S3 method for class 'gaussian_naive_bayes'
+#'
 nb_gaussian_fit = function(x,y,args=list()){
   y = as.factor(y)
   model = do.call(gaussian_naive_bayes, c(list(x=x,y=y),args))
   model
 }
 
+#' Prediction based on Gaussian Naive Bayes model.
+#' @param nb_gaussian_fit Output of \code{\link{gaussian_naive_bayes}} or \code{\link{nb_gaussian_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE as
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.nb_gaussian_fit = function(nb_gaussian_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -362,12 +388,33 @@ predict.nb_gaussian_fit = function(nb_gaussian_fit,x,y,xnew=NULL,weights=FALSE){
   fit
 }
 
+#' This function calculates the Bernulli Naive Bayes model based on the \code{\link{naivebayes}} package 
+#'
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param args List of arguments passed to  \code{\link{naivebayes}}
+#' @import naivebayes
+#'
+#' @return An object with S3 method for class 'bernulli_naive_bayes'
+#'
 nb_bernulli_fit = function(x,y,args=list()){
   y = as.factor(y)
   model = do.call(naive_bayes, c(list(x=x,y=y),args))
   model
 }
-
+#' Prediction based on Bernulli Naive Bayes model.
+#' @param nb_bernulli_fit Output of \code{\link{naive_bayes}} or \code{\link{nb_bernulli_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE as
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.nb_bernulli_fit = function(nb_bernulli_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -380,11 +427,16 @@ predict.nb_bernulli_fit = function(nb_bernulli_fit,x,y,xnew=NULL,weights=FALSE){
 }
 
 
-#model = nb_bernulli_fit(x=as.matrix(X_training), y=W_training+1)
-#preds = predict.nb_bernulli_fit(model, x = as.matrix(X_training), y = W_training, xnew = as.matrix(X_test))$prediction
 
-
-#10
+#' This function calculates the xgboost model based on the \code{\link{xgboost}} package 
+#'
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param args List of arguments passed to  \code{\link{xgboost}}
+#' @import xgboost
+#'
+#' @return An object with S3 method for class 'xgb.Booster'
+#'
 
 # seems not to work with the do.call() function
 #xgboost_fit = function(x,y,args=list()){
@@ -415,6 +467,19 @@ xgboost_fit <- function(x, y, args=list()) {
   model
 }
 
+#' Prediction based on xgboost model.
+#' @param xgboost_fit Output of \code{\link{xgboost}} or \code{\link{xgboost_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE as
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.xgboost_fit = function(xgboost_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -440,10 +505,15 @@ predict.xgboost_fit = function(xgboost_fit,x,y,xnew=NULL,weights=FALSE){
 }
 
 
-#model = xgboost_fit(as.matrix(X_training), as.matrix(W_training+1))
-#preds = predict.xgboost_fit(model, x = as.matrix(X_training), y = as.matrix(W_training), xnew = as.matrix(X_test))$prediction
-#test = predict(model, newdata=X_test, type="prob")
-#preds = preds %>% as_tibble()
+#' This function calculates the Support Vector Machines model based on the \code{\link{e1071}} package 
+#'
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param args List of arguments passed to  \code{\link{xgboost}}
+#' @import xgboost
+#'
+#' @return An object with S3 method for class 'svm'
+#'
 
 svm_fit = function(x,y,args=list()){
   model = do.call(svm, c(list(y = y, x = x, probability = TRUE, kernel = "sigmoid", 
@@ -451,6 +521,19 @@ svm_fit = function(x,y,args=list()){
   return(model)
 }
 
+#' Prediction based on Support Vector Machines model.
+#' @param svm_fit Output of \code{\link{e1071::svm}} or \code{\link{svm_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE as
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.svm_fit <- function(svm_fit, x, y, xnew = NULL, weights = FALSE) {
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -466,18 +549,34 @@ predict.svm_fit <- function(svm_fit, x, y, xnew = NULL, weights = FALSE) {
 }
 
 
-#model = svm_fit(x=as.matrix(X_training), y=as.matrix(W_training$W))
-#preds = predict.svm_fit(model[[3]], x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))$prediction
 
-
-
-
-
+#' This function calculates the Linear Discriminant Analysis based on the \code{\link{MASS}} package 
+#'
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param args List of arguments passed to  \code{\link{MASS}}
+#' @import MASS
+#'
+#' @return An object with S3 method for class 'lda'
+#'
 lda_fit = function(x,y,args=list()){
   model = do.call(lda, c(list(x = x, grouping = y, cv = TRUE)))
   model
 }
 
+#' Prediction based on Linear Discriminant Analysis.
+#' @param lda_fit Output of \code{\link{lda}} or \code{\link{lda_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE as
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.lda_fit = function(lda_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -489,7 +588,15 @@ predict.lda_fit = function(lda_fit,x,y,xnew=NULL,weights=FALSE){
   fit
 }
 
-
+#' This function calculates the Quadratic Discriminant Analysis based on the \code{\link{MASS}} package 
+#'
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param args List of arguments passed to  \code{\link{MASS}}
+#' @import MASS
+#'
+#' @return An object with S3 method for class 'qda'
+#'
 qda_fit = function(x,y,args=list()){
   y = as.factor(y)
   
@@ -497,6 +604,19 @@ qda_fit = function(x,y,args=list()){
   model
 }
 
+#' Prediction based on Quadratic Discriminant Analysis.
+#' @param qda_fit Output of \code{\link{qda}} or \code{\link{qda_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE as
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.qda_fit = function(qda_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -509,15 +629,34 @@ predict.qda_fit = function(qda_fit,x,y,xnew=NULL,weights=FALSE){
 }
 
 
-#model <- lda_fit(x = as.matrix(X_training), y = as.factor(W_training$W))
-#preds <- predict.lda_fit(model[[3]], x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))$prediction
-
-
-probability_forest_fit = function(x,y,args=list()){
+#' Calculates Probability Forest fit using the \code{\link{grf}} package
+#'
+#' @param x Matrix of covariates
+#' @param y vector of outcomes
+#' @param args List of arguments passed to  \code{\link{probability_forest}}
+#' @import grf
+#'
+#' @return An object with S3 class "probability_forest"
+#'
+#' @keywords internal
+#'
+probability_forest_fit = function(x,y,args=list(num.trees=1000)){
   model = do.call(probability_forest, c(list(X = x, Y = as.factor(y)), args))
   model
 }
-
+#' Prediction based on Probability Forest fit.
+#' @param probability_forest_fit Output of \code{\link{probability_forest}} or \code{\link{probability_forest_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.probability_forest_fit = function(probability_forest_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   
@@ -533,10 +672,17 @@ predict.probability_forest_fit = function(probability_forest_fit, x,y,xnew=NULL,
 }
 
 
-
-#model <- probability_forest_fit(x = as.matrix(X_training), y = as.factor(W_training))
-#preds <- predict.probability_forest_fit(model[[3]], x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))$prediction
-
+#' Calculates Bagged classification tree model using the \code{\link{adabag}} package
+#'
+#' @param x Matrix of covariates
+#' @param y vector of outcomes
+#' @param args List of arguments passed to  \code{\link{bagging}}
+#' @import adabag
+#'
+#' @return An object with S3 class "bagging"
+#'
+#' @keywords internal
+#'
 bagging_fit = function(x, y, args = list()) {
   data <- data.frame(y = as.factor(y), x)
   model = do.call(bagging, c(list(formula = y ~ ., data = data,
@@ -550,7 +696,19 @@ bagging_fit = function(x, y, args = list()) {
   model
 }
 
-
+#' Prediction based on Bagged classification tree model.
+#' @param bagging_fit Output of \code{\link{bagging}} or \code{\link{bagging_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.bagging_fit = function(bagging_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -568,50 +726,89 @@ predict.bagging_fit = function(bagging_fit,x,y,xnew=NULL,weights=FALSE){
 }
 
 
-#model = bagging_fit(x = as.matrix(X_training), y = W_training)
-#preds = predict.bagging_fit(model, x = as.matrix(X_training), y = as.matrix(W_training), xnew = as.matrix(X_test))$prediction
+# #' Calculates AdaBoost.M1 fit using the \code{\link{adabag}} package
+# #'
+# #' @param x Matrix of covariates
+# #' @param y vector of outcomes
+# #' @param args List of arguments passed to  \code{\link{boosting}}
+# #' @import adabag
+# #'
+# #' @return An object with S3 class "boosting"
+# #'
+# #' @keywords internal
+# #'
+# boosting_fit = function(x, y, args = list()) {
+#   data <- data.frame(y = as.factor(y), x)
+#   model = do.call(boosting, c(list(formula = y ~ ., data = data,
+#                                   mfinal = 50,
+#                                   control = rpart.control(objective = "binary:logistic",
+#                                                           eval_metric = "rmse",
+#                                                           eta = 0.3, max_depth = 2,
+#                                                           minsplit = 10,  # Adjust minsplit to an appropriate value
+#                                                           cp = -1
+#                                   )), args))
+#   model
+# }
+# #' Prediction based on AdaBoost.M1.
+# #' @param boosting_fit Output of \code{\link{boosting}} or \code{\link{boosting_fit}}
+# #' @param x Covariate matrix of training sample
+# #' @param y Vector of outcomes of training sample
+# #' @param xnew Covariate matrix of test sample
+# #' @param weights Always FALSE
+# #'
+# #' @return Returns list containing:
+# #' \item{prediction}{vector of predictions for xnew}
+# #' \item{weights}{Not supported for propensity score estimation}
+# #'
+# #' @keywords internal
+# #'
+# predict.boosting_fit = function(boosting_fit,x,y,xnew=NULL,weights=FALSE){
+#   if (is.null(xnew)) xnew = x
+#   if (weights==TRUE) {
+#     warning("Weights are not supported for propensity score estimation.")
+#   }
+#   
+#   data = as.data.frame(xnew)
+#   data$y <- as.factor(0)
+#   
+#   fit = predict(boosting_fit, newdata = data)$prob
+#   if (length(unique(y))==2){
+#     colnames(fit) = sort(unique(y))
+#   }  
+#   list("prediction"=fit,  "weights"="No weighted representation available.")
+# }
 
 
-boosting_fit = function(x, y, args = list()) {
-  data <- data.frame(y = as.factor(y), x)
-  model = do.call(boosting, c(list(formula = y ~ ., data = data,
-                                  mfinal = 50,
-                                  control = rpart.control(objective = "binary:logistic",
-                                                          eval_metric = "rmse",
-                                                          eta = 0.3, max_depth = 2,
-                                                          minsplit = 10,  # Adjust minsplit to an appropriate value
-                                                          cp = -1
-                                  )), args))
-  model
-}
 
-predict.boosting_fit = function(boosting_fit,x,y,xnew=NULL,weights=FALSE){
-  if (is.null(xnew)) xnew = x
-  if (weights==TRUE) {
-    warning("Weights are not supported for propensity score estimation.")
-  }
-  
-  data = as.data.frame(xnew)
-  data$y <- as.factor(0)
-  
-  fit = predict(boosting_fit, newdata = data)$prob
-  if (length(unique(y))==2){
-    colnames(fit) = sort(unique(y))
-  }  
-  list("prediction"=fit,  "weights"="No weighted representation available.")
-}
-
-
-#model = boosting_fit(x = as.matrix(X_training), y = W_training)
-#preds = predict.boosting_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = as.matrix(X_test))
-
-
+#' Calculates Adaboost.M1 model using the \code{\link{fastadaboost}} package
+#'
+#' @param x Matrix of covariates
+#' @param y vector of outcomes
+#' @param args List of arguments passed to  \code{\link{adaboost}}
+#' @import fastAdaboost
+#'
+#' @return An object S3 method for class 'adaboost'
+#'
+#' @keywords internal
+#'
 adaboost_fit = function(x,y,args=list()){
   data <- data.frame(y = as.factor(y), x)
   model = do.call(adaboost ,c(list(data=data, formula = y ~ ., nIter=20, loss="logistic", w=NULL), args))
   model
 }
-
+#' Prediction based on Adaboost.M1 model.
+#' @param adaboost_fit Output of \code{\link{adaboost}} or \code{\link{adaboost_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.adaboost_fit = function(adaboost_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -626,17 +823,36 @@ predict.adaboost_fit = function(adaboost_fit, x,y,xnew=NULL,weights=FALSE){
 }
 
 
-#model = adaboost_fit(x = as.matrix(X_training), y = as.factor(W_training))
-#preds = predict.boosting_fit(model[[2]], x = as.matrix(X_training), y = subset_y, xnew = as.matrix(X_test))$prediction
-#data = as.data.frame(cbind((W_training), X_training))
-
+#' Calculates k-Nearest Neighbor model using the \code{\link{kknn}} package
+#'
+#' @param x Matrix of covariates
+#' @param y vector of outcomes
+#' @param args List of arguments passed to  \code{\link{kknn}}
+#' @import grf
+#'
+#' @return An object with S3 class "kknn"
+#'
+#' @keywords internal
+#'
 # @Maren: kmax depedent on # classes?
 knn_fit = function(x,y,args=list()){ # args=list(kmax=floor(0.05*nrow(x)))
   data <- data.frame(y = as.factor(y), x)
   model = do.call(train.kknn ,c(list(formula = y ~ ., data = data), args)) # args
   model
 }
-
+#' Prediction based on k-Nearest Neighbor model.
+#' @param knn_fit Output of \code{\link{kknn}} or \code{\link{knn_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.knn_fit = function(knn_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -649,17 +865,36 @@ predict.knn_fit = function(knn_fit, x,y,xnew=NULL,weights=FALSE){
 }
 
 
-#model = knn_fit(x = as.matrix(X_training), y = as.factor(W_training), args = list(kmax=20))
-#preds = predict.knn_fit(model[[6]], x = as.matrix(X_training), y = as.matrix(W_training), xnew = X_test)$prediction
 
-
-
+#' Calculates k-Nearest Neighbor model using the \code{\link{kknn}} package
+#'
+#' @param x Matrix of covariates
+#' @param y vector of outcomes
+#' @param args List of arguments passed to  \code{\link{kknn}}
+#' @import grf
+#'
+#' @return An object with S3 class "kknn"
+#'
+#' @keywords internal
+#'
 knn_radius_fit = function(x,y,args=list(distance=10)){
   data <- data.frame(y = as.factor(y), x)
   model = do.call(train.kknn ,c(list(formula = y ~ ., data = data), args))
   model
 }
-
+#' Prediction based on k-Nearest Neighbor model.
+#' @param knn_radius_fit Output of \code{\link{kknn}} or \code{\link{knn_radius_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.knn_radius_fit = function(knn_radius_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -671,9 +906,19 @@ predict.knn_radius_fit = function(knn_radius_fit, x,y,xnew=NULL,weights=FALSE){
   fit
 }
 
-#model = knn_radius_fit(x = as.matrix(X_training), y = as.factor(W_training), args = list(distance=5))
-#preds = predict.knn_radius_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
 
+
+#' Calculates Multilayer Perceptron model using the \code{\link{nnet}} package
+#'
+#' @param x Matrix of covariates
+#' @param y vector of outcomes
+#' @param args List of arguments passed to  \code{\link{nnet}}
+#' @import nnet
+#'
+#' @return An object with S3 class "nnet"
+#'
+#' @keywords internal
+#'
 mlpc_fit = function(x,y,args=list(size=1)){
   #if(is.null(size)) size=1
   #model = do.call(nnet ,c(list(x=x, y = class.ind(y), softmax = TRUE, lineout=TRUE), size=1))
@@ -681,7 +926,19 @@ mlpc_fit = function(x,y,args=list(size=1)){
   model = do.call(nnet ,c(list(x=x, y = class.ind(y), softmax = TRUE, lineout=TRUE), args))
   model
 }
-
+#' Prediction based on Multilayer Perceptron fit.
+#' @param nnet_fit Output of \code{\link{nnet}} or \code{\link{nnet_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.mlpc_fit = function(mlpc_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -694,14 +951,34 @@ predict.mlpc_fit = function(mlpc_fit, x,y,xnew=NULL,weights=FALSE){
 }
 
 
-#model = mlpc_fit(x = as.matrix(X_training), y = as.factor(W_training))
-#preds = predict.mlpc_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
-
+#' Calculates BART classification model using the \code{\link{bartMachine}} package
+#'
+#' @param x Matrix of covariates
+#' @param y vector of outcomes
+#' @param args List of arguments passed to  \code{\link{bartMachine}}
+#' @import bartMachine
+#'
+#' @return An object with S3 class "bartMachine"
+#'
+#' @keywords internal
+#'
 bart_fit = function(x,y,args=list()){
   model = do.call(bartMachine, c(list(X=as.data.frame(x), y=as.factor(y)), args))
   model
 }
-
+#' Prediction based on Probability Forest fit.
+#' @param bart_fit Output of \code{\link{bartMachine}} or \code{\link{bart_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.bart_fit = function(bart_fit, x,y,xnew, weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -715,12 +992,17 @@ predict.bart_fit = function(bart_fit, x,y,xnew, weights=FALSE){
   list("prediction"=fit,  "weights"="No weighted representation available.")
 }
 
-#model = bart_fit(x = as.matrix(X_training), y = as.factor(W_training))
-#preds = predict.bart_fit(model, x = as.matrix(X_training), y = as.matrix(W_training$W), xnew = X_test)$prediction
-
-
-
-
+#' Calculates Probability Forest fit using the \code{\link{ranger}} package
+#'
+#' @param x Matrix of covariates
+#' @param y vector of outcomes
+#' @param args List of arguments passed to  \code{\link{ranger}}
+#' @import ranger
+#'
+#' @return An object with S3 class "ranger"
+#'
+#' @keywords internal
+#'
 ranger_fit = function(x,y,args=list()){ #args=list(min.node.size=0.1*nrow(x), mtry=ceiling(sqrt(ncol(x))))
   data <- data.frame(y = as.factor(y), x)
 
@@ -728,7 +1010,19 @@ ranger_fit = function(x,y,args=list()){ #args=list(min.node.size=0.1*nrow(x), mt
   model
 }
 
-
+#' Prediction based on the \code{\link{ranger}} Probability Forest fit.
+#' @param probability_forest_fit Output of \code{\link{ranger}} or \code{\link{probability_forest_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.ranger_fit = function(ranger_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -747,14 +1041,34 @@ predict.ranger_fit = function(ranger_fit, x,y,xnew=NULL,weights=FALSE){
 #model = ranger_fit(x = as.matrix(X_training), y = W_training)
 #preds = predict.ranger_fit(model, x = as.matrix(X_training), y = W_training, xnew = X_test)$prediction
 
-
+#' This function calculates the (multinomial) logistic regression based on the \code{\link{nnet}} package 
+#'
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param args List of arguments passed to  \code{\link{nnet}}
+#' @import nnet
+#'
+#' @return An object with S3 method for class 'nnet'
+#'
 multinom_fit = function(x,y,args=list()){
   data <- data.frame(y = as.factor(y), x)
   
   model = do.call(multinom, c(list(data=data, formula= y~., model=TRUE), args))
   model
 }
-
+#' Prediction based on (multinomial) logistic regression.
+#' @param multinom_fit Output of \code{\link{nnet}} or \code{\link{multinom_fit}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Always FALSE as
+#'
+#' @return Returns list containing:
+#' \item{prediction}{vector of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.multinom_fit = function(multinom_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -773,8 +1087,6 @@ predict.multinom_fit = function(multinom_fit, x,y,xnew=NULL,weights=FALSE){
   fit
 }
 
-#model = multinom_fit(x = as.matrix(X_training), y = W_training)
-#preds = predict.multinom_fit(model, x = as.matrix(X_training), y = W_training, xnew = X_test)$prediction
 
 
 
@@ -909,7 +1221,7 @@ predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, classifier = "
   # Perform optimization for all samples simultaneously
   opt_results <- apply(q_matrix_tensor, MARGIN = 1, function(q_matrix_row) {
     opt_result <- optim(rep(1/n_classes, n_classes), 
-                        kl_divergence, 
+                        kl_convergence, 
                         q_matrix = matrix(q_matrix_row, nrow = n_classes),
                         method = "L-BFGS-B", 
                         lower = rep(0, n_classes), upper = rep(1, n_classes))
