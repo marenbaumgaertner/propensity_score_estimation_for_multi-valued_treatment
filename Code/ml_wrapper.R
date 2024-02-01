@@ -339,10 +339,12 @@ predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE){
   }
   
   lambda = min(logit_fit$lambda)
-  fit = predict(logit_fit, newx=xnew, s = lambda, type = "response") %>% as_tibble()
+  fit = predict(logit_fit, newx=as.matrix(xnew), s = lambda, type = "response") %>% as_tibble()
   if (length(logit_fit$glmnet.fit$classnames)==2){
     fit[,2] = 1 - fit[,1]
     colnames(fit) = rev(logit_fit$glmnet.fit$classnames)
+  }else{
+    colnames(fit) = logit_fit$classnames
   }
   
   fit
@@ -459,7 +461,7 @@ xgboost_fit <- function(x, y, args=list()) {
     model <- xgboost(data = x, label = y, nrounds = 10,
                      objective = "binary:logistic", eval_metric = "logloss", max_depth = 5, verbose=0, args)
   } else {
-    y <- y - 1
+    if (min(y)==1) y <- y - 1
     model <- xgboost(data = x, label = y, nrounds = 10, num_class = K,
                      objective = "multi:softprob", eval_metric = "mlogloss", max_depth = 5, verbose=0, args)
   }
@@ -919,11 +921,11 @@ predict.knn_radius_fit = function(knn_radius_fit, x,y,xnew=NULL,weights=FALSE){
 #'
 #' @keywords internal
 #'
-mlpc_fit = function(x,y,args=list(size=1)){
+mlpc_fit = function(x,y,args=list(size = c(5))){ #size=1
   #if(is.null(size)) size=1
-  #model = do.call(nnet ,c(list(x=x, y = class.ind(y), softmax = TRUE, lineout=TRUE), size=1))
-  
+  data <- data.frame(y = as.factor(y), x)
   model = do.call(nnet ,c(list(x=x, y = class.ind(y), softmax = TRUE, lineout=TRUE), args))
+  #model = do.call(neuralnet, c(list(formula = y ~ ., data = data), args))
   model
 }
 #' Prediction based on Multilayer Perceptron fit.
