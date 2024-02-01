@@ -20,6 +20,8 @@ set.seed(42)
 options(scipen= 999)
 ```
 
+# Multi-valued
+
 Define inherently multi-valued classifieres
 
 ```{r}
@@ -32,9 +34,9 @@ classifiers <- c(
 classifiers_to_tune <- classifiers[!(classifiers %in% c("lda", "qda"))]
 ```
 
-# Create multi-valued train data
+## Create multi-valued train data
 
-```{r}
+```{}
 n=2000
 K=3
 p=15
@@ -67,13 +69,25 @@ split_indices <- sample.split(dataset$W, SplitRatio = 0.8)
 training_data <- dataset[split_indices, ]
 test_data <- dataset[!split_indices, ]
 
-W_training <- as.matrix(data.frame(W = training_data$W))
-X_training <- as.matrix(data.frame(X[split_indices, ]))
+W  <- as.matrix(data.frame(W = training_data$W))
+X  <- as.matrix(data.frame(X[split_indices, ]))
 W_test <-     as.matrix(data.frame(W = test_data$W))
 X_test <-     as.matrix(data.frame(X[!split_indices, ]))
 ```
 
-# Define methods
+## Use Imbens (2016) data to fine tune classifiers
+
+```{r}
+#dataname <- "Imbens_2016"
+#dataname <- "Linden_2015"
+dataname <- "Archarky_2023"
+datapath <- paste0("data/real_data_", dataname,".R")
+#datapath <- paste0("data/simulate_data_", dataname,".R")
+source(datapath)
+X <- as.matrix(X)
+```
+
+## Define methods
 
 For each classifier I create a list which contains information on the classifier:
 
@@ -96,7 +110,7 @@ For each classifier I create a list which contains information on the classifier
 
     Lastly, I define the tuning grid for tuning parameter optimization. This grid allows the algorithm to find the optimal combination of parameters that results in the best model performance.
 
-## 1. Multinomial logistic regression (glmnet)
+### 1. Multinomial logistic regression (glmnet)
 
 -   alpha: Mixing Percentage
 
@@ -115,11 +129,11 @@ multinomial_logit$parameters <- data.frame(parameter = c("alpha", "lambda"),
 multinomial_logit$fit <- logit_fit
 multinomial_logit$predict <- predict.logit_fit
 # design the parameter tuning grid
-multinomial_logit$grid <- expand.grid(alpha = seq(0,1,0.5),
-                    lambda = seq(0,1,0.5))
+multinomial_logit$grid <- expand.grid(alpha = seq(0,1,0.05))#,
+                    #lambda = seq(0.0001,0.01,0.005)) # lambda tunes itself
 ```
 
-## 2. Multinomial logistic regression (nnet)
+### 2. Multinomial logistic regression (nnet)
 
 multinom calls nnet() with zero hidden layers (size=0)
 
@@ -133,19 +147,18 @@ multinomial_logit_nnet <- list(type = "Classification",
               library = "nnet",
               multiclass = TRUE) 
 # define parameters
-multinomial_logit_nnet$parameters <- data.frame(parameter = c("alpha", "lambda"),
-                  class = rep("numeric", 2),
-                  label = c("Mixing Percentage", "Regularization"))
+multinomial_logit_nnet$parameters <- data.frame(parameter = c("decay"),
+                  class = c("numeric"),
+                  label = c("weight decay"))
 
-multinomial_logit_nnet$fit <- logit_fit
-multinomial_logit_nnet$predict <- predict.logit_fit
+multinomial_logit_nnet$fit <- multinom_fit
+multinomial_logit_nnet$predict <- predict.multinom_fit
 # design the parameter tuning grid
-multinomial_logit_nnet$grid <- expand.grid(alpha = seq(0,1,0.5),
-                    lambda = seq(0,1,0.5))
+multinomial_logit_nnet$grid <- expand.grid(decay = seq(0,1,0.05))
 
 ```
 
-## 3. kNN
+### 3. kNN
 
 -   kmax: number of neighbors considered
 
@@ -163,12 +176,12 @@ params <- data.frame(parameter = c("kmax", "distance", "kernel"),
 knn$params <- params
 knn$fit <- knn_fit
 knn$predict <- predict.knn_fit
-knn$grid <- expand.grid(kmax = seq(5,30,10),
+knn$grid <- expand.grid(kmax = seq(5,20,1),
                         #distance = seq(1,5,1),
                         kernel = c("rectangular", "gaussian", "optimal"))
 ```
 
-## 4. kNN (Radius)
+### 4. kNN (Radius)
 
 ```{r}
 knn_radius <- list(type = "Classification",
@@ -186,7 +199,7 @@ knn_radius_grid <- expand.grid(distance = seq(1,5,1),
 knn_radius$grid <- knn_radius_grid
 ```
 
-## 5. Naive Bayes (Bernulli)
+### 5. Naive Bayes (Bernulli)
 
 -   laplace:
 
@@ -200,11 +213,11 @@ nb_bernulli <- list(
                       label = c("value of Laplace smoothing")),
   fit = nb_bernulli_fit,
   predict = predict.nb_bernulli_fit,
-  grid = expand.grid(laplace = seq(0, 20, 2))
+  grid = expand.grid(laplace = c(0, 1, 10, 50, 100, 200))
 )
 ```
 
-## 6. Naive Bayes (Gaussian)
+### 6. Naive Bayes (Gaussian)
 
 -   laplace:
 
@@ -213,16 +226,16 @@ nb_gaussian <- list(
   type = "Classification",
   library = "naivebayes",
   multiclass = TRUE,
-  params = data.frame(parameter = c("laplace"), class = c("numeric"), label = c("value of Laplace smoothing")),
+  params = data.frame(),
   fit = nb_gaussian_fit,
-  predict = predict.nb_gaussian_fit,
-  grid = expand.grid(laplace = seq(0, 20, 2))
+  predict = predict.nb_gaussian_fit
 )
 ```
 
-## 7. Probability forest (grf)
+### 7. Probability forest (grf)
 
--   mtry:
+-   mtry:Number of variables tried for each split\
+    As none of my dataset has more than 11 covariates, this is set to ncol(X) (default) and not tuned
 
 -   min.node.size:
 
@@ -235,17 +248,23 @@ probability_forest_grf <- list(
     type = "Classification",
     library = "grf",
     multiclass = TRUE,
-    params = data.frame(parameter = c("mtry", "min.node.size", "alpha"), class = c("numeric", "numeric", "numeric"), label = c("")),
+    params = data.frame(parameter = c("mtry", "min.node.size", "alpha", "imbalance.penalty"), 
+                        class = rep("numeric",4), 
+                        label = c("Number of variables tried for each split",
+                                  "minimum number of observations in each tree leaf",
+                                  "controls maximum imbalance of split",
+                                  "controls how harshly imbalanced splits are penalized"
+                                  )),
     fit = probability_forest_fit,
     predict = predict.probability_forest_fit,
-    grid = expand.grid(mtry = seq(as.integer(sqrt(ncol(X))), as.integer(sqrt(ncol(X)))+6,2),
-    min.node.size = seq(5, 20, 5),
-    alpha = seq(0.05,0.1,0.03)
+    grid = expand.grid(min.node.size = seq(5, 20, 5),
+                       alpha = seq(0,0.1,0.03),
+                       imbalance.penalty = seq(0,1,0.5)
     )
     )
 ```
 
-## 8. Probability forest (ranger)
+### 8. Probability forest (ranger)
 
 -   mtry:
 
@@ -261,14 +280,18 @@ probability_forest_ranger <- list(
   params = data.frame(parameter = c(""), class = c(""), label = c("")),
   fit = ranger_fit,
   predict = predict.ranger_fit,
-  grid = expand.grid(mtry = seq(as.integer(sqrt(ncol(X))), as.integer(sqrt(ncol(X)))+6,2),
-                     min.node.size = seq(5, 20, 5),
-                     alpha = seq(0.05,0.1,0.03)
-                     )
+  grid = expand.grid(
+    mtry = ncol(X), #floor(x * c(.05, .15, .25, .333, .4)),
+    min.node.size = c(1, 3, 5, 10), 
+    replace = c(TRUE, FALSE),                               
+    sample.fraction = c(.5, .63, .8, 1),
+    splitrule = c("gini", "extratrees"),
+    importance = c('none', 'impurity', 'impurity_corrected', 'permutation')
+)
 )
 ```
 
-## 9. MLPC
+### 9. MLPC
 
 -   size:
 
@@ -277,14 +300,14 @@ mlpc <- list(
   type = "Classification",
   library = "nnet",
   multiclass = TRUE,
-  params = data.frame(parameter = c("size"), class = c("numeric"), label = c("number of hidden layers")),
+  params = data.frame(parameter = c("size"), class = c("numeric"), label = c("number of units in the hidden layer")),
   fit = mlpc_fit,
   predict = predict.mlpc_fit,
-  grid = expand.grid(size=seq(1,3,1))
+  grid = expand.grid(size=seq(1,10,1))
 )
 ```
 
-## 10. xgboost
+### 10. xgboost
 
 -   eta: learning rate
 -   gamma: minimum loss reduction required for a split
@@ -296,17 +319,25 @@ xgboost <- list(
   type = "Classification",
   library = "xgboost",
   multiclass = TRUE,
-  params = data.frame(parameter = c("eta", "gamma", "nrounds", "min_child_weight"), class = c("numeric", "numeric", "numeric", "numeric"), label = c("learning rate", "minimun loss reduction required for split", "# of boosting iterations", "minimum sum of instance weight (hessian) needed in a child")),
+  params = data.frame(parameter = c("eta", "gamma", "nrounds", "min_child_weight", "max_depth", "subsample"), 
+                      class = rep("numeric", 6), 
+                      label = c("learning rate", "minimun loss reduction required for split", "# of boosting iterations", "minimum sum of instance weight (hessian) needed in a child", "maximum depth of a tree", "subsample ratio of the training instance")),
   fit = xgboost_fit,
   predict = predict.xgboost_fit,
-  grid = expand.grid(eta = seq(0.1,0.5,0.1),
+  grid = expand.grid(eta = c(0.001,0.01,0.1,0.2),
                      gamma = seq(0,1,0.2),
-                     nround = seq(5, 100, 10),
-                     min_child_weight = seq(0,2,0.5))
+                     nround = seq(5, 40, 5),
+                     min_child_weight = seq(0,2,0.5),
+                     max_depth = seq(3,10,2),
+                     subsample = c(0.5,0.7,1))
 )
+# Randomly select 1000 rows
+random_sample_indices <- sample(nrow(xgboost$grid), 1000, replace = FALSE)
+xgboost$grid <- xgboost$grid[random_sample_indices, ]
+
 ```
 
-# Fine tuning classifier
+## Fine tuning classifier
 
 To adapt in ml_wrapper: - fit: add ... in function arg - predict: just return fit
 
@@ -319,34 +350,115 @@ For each grid point, the function splits the data into training and validation s
 Finally, the function identifies the set of parameters that resulted in the lowest average Brier Score and returns both the matrix of performance scores (**`bs_mat`**) and the best parameters (**`best_params`**) as output.
 
 ```{r, message=FALSE}
-best_logit <- finetuning_soft_classifier(x=X_training, y=W_training, method=multinomial_logit)
+best_logit <- finetuning_soft_classifier(x=X, y=W , method=multinomial_logit)
 
-best_logit_nnet <- finetuning_soft_classifier(x=X_training, y=W_training, method=multinomial_logit_nnet)
+best_logit_nnet <- finetuning_soft_classifier(x=X , y=W , method=multinomial_logit_nnet)
 
-best_knn <- finetuning_soft_classifier(x=X_training, y=W_training, method=knn)
+best_knn <- finetuning_soft_classifier(x=X, y=W , method=knn)
 
-best_knn_radius <- finetuning_soft_classifier(x=X_training, y=W_training, method=knn_radius)
+#best_knn_radius <- finetuning_soft_classifier(x=X, y=W , method=knn_radius)
 
-best_nb_bernulli <- finetuning_soft_classifier(x=X_training, y=W_training, method=nb_bernulli)
+best_nb_bernulli <- finetuning_soft_classifier(x=X, y=W , method=nb_bernulli)
 
-best_nb_gaussian <- finetuning_soft_classifier(x=X_training, y=W_training, method=nb_gaussian)
+#best_nb_gaussian <- finetuning_soft_classifier(x=X, y=W , method=nb_gaussian)
 
-best_probability_forest_grf <- finetuning_soft_classifier(x=X_training,y=W_training, method=probability_forest_grf)
+best_probability_forest_grf <- finetuning_soft_classifier(x=X, y=W, method=probability_forest_grf)
 
-best_probability_forest_ranger <- finetuning_soft_classifier(x=X_training, y=W_training, method=probability_forest_ranger)
+best_probability_forest_ranger <- finetuning_soft_classifier(x=X, y=W, method=probability_forest_ranger)
 
-best_mlpc <- finetuning_soft_classifier(x=X_training, y=W_training, method=mlpc)
+best_mlpc <- finetuning_soft_classifier(x=X, y=W, method=mlpc)
 
-best_xgboost <- finetuning_soft_classifier(x=X_training, y=W_training, method=xgboost)
+best_xgboost <- finetuning_soft_classifier(x=X, y=W, method=xgboost)
 
 ```
 
+
 ```{r}
-best_knn <- finetuning_soft_classifier(x=X, y=W, method=knn)
+best_logit$best_params
+
+best_logit_nnet$best_params 
+
 best_knn$best_params
+
+#best_knn_radius$best_params
+
+best_nb_bernulli$best_params
+
+#best_nb_gaussian$best_params
+
+best_probability_forest_grf$best_params
+
+best_probability_forest_ranger$best_params
+
+best_mlpc$best_params
+
+best_xgboost$best_params
 ```
 
 
 ```{r}
-best_mlpc$best_params
+tuning_results <- list(best_knn, best_logit, best_logit_nnet, best_nb_bernulli, best_probability_forest_grf, best_probability_forest_ranger, best_mlpc)
+
+# Save the data.table to a file using saveRDS
+saveRDS(tuning_results, file = paste0("sim_results/tuning_results_", dataname, ".rds"))
+
+# Load the data.table back
+#loaded_nested_dt <- readRDS("tuning_results_imbens.rds")
+
+```
+
+# Binary only
+
+## Create binary data
+
+The binary dataset is created by just keeping sample for treatment `1`and `2`.
+
+```{}
+
+dataset <- dataset %>% filter(W %in% c(1,2))
+
+```
+
+## Define binary only methods
+
+### 11. Adaboost
+
+```{}
+adaboost <- list(
+  type = "Classification",
+  library = "fastadaboost",
+  multiclass = TRUE,
+  params = data.frame(parameter = c("nIter"), class = c("numeric"), label = c("")),
+  fit = adaboost_fit,
+  predict = predict.adaboost_fit,
+  grid = expand.grid()
+)
+```
+
+### 12. BART
+
+```{}
+bart <- list(
+  type = "Classification",
+  library = "bartMachine",
+  multiclass = TRUE,
+  params = data.frame(parameter = c("num_trees", "alpha", "beta"), class = c("numeric"), label = c("")),
+  fit = bart_fit,
+  predict = predict.bart_fit,
+  grid = expand.grid()
+)
+```
+
+### 13. SVM
+
+```{}
+svm <- list(
+  type = "Classification",
+  library = "e1017",
+  multiclass = TRUE,
+  params = data.frame(parameter = c(""), class = c("numeric"), label = c("")),
+  fit = svm_fit,
+  predict = predict.svm_fit,
+  grid = expand.grid()
+)
 ```
