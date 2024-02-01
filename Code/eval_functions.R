@@ -120,7 +120,7 @@ make_calibtation_plot <- function(probabilities, outcome, method) {
   return(plot)
 }
 
-kl_divergence <- function(p, q_matrix) {
+kl_convergence <- function(p, q_matrix) {
   epsilon <- 1e-10
   p <- p / sum(p) # Normalize p to sum to 1
   K <- length(p)
@@ -132,18 +132,18 @@ kl_divergence <- function(p, q_matrix) {
       r_ij <- q_matrix[i, j]
       
       if (!is.na(r_ij)) {
-        total_divergence <- total_divergence + 
+        l <- l + 
           r_ij * log((r_ij + epsilon) / (u_ij + epsilon)) + 
           (1 - r_ij) * log(((1 - r_ij) + epsilon) / ((1 - u_ij) + epsilon)) 
       }
     }
   }
   
-  return(total_divergence)
+  return(l)
 }
 
 
-finetuning_soft_classifier <- function(x, y, method, iter = 10, n_folds=5){
+finetuning_soft_classifier <- function(x, y, method, n_folds=5){
   #library(method$library) # install and load package
   
   if (is.null(method$grid)) {
@@ -168,6 +168,7 @@ finetuning_soft_classifier <- function(x, y, method, iter = 10, n_folds=5){
   dataset <- data.frame(y = y, x = x)
   
   for (i in 1:grids) {
+    print(paste0("grid ",i, " of ", grids))
     params <- list()
     # Store tuning parameters
     for (col_name in colnames(method$grid)) {
@@ -177,34 +178,28 @@ finetuning_soft_classifier <- function(x, y, method, iter = 10, n_folds=5){
         params[[col_name]] <- method$grid[[col_name]][i]
       }
     }
-    bs_iter <- array(0, dim=iter)
-    for (j in 1:iter) {
       
-      n = nrow(dataset)
+    n = nrow(dataset)
+    
+    # define cross folding index
+    fold = sample(1:n_folds,n,replace=T)
+    predictions = data.frame(matrix(NA,nrow=n, ncol = length(unique(W))))
+    
+    # cross validation
+    for (f in 1:n_folds){
+      # fit model 
+      model <- do.call(method$fit, list(x = X[fold != f,], y = W[fold != f], params))
+      #print(paste0("Model param lambda = ", model$lambda))
+      #print(paste0("Grid param lambda = ", params$lambda))
       
-      # define cross folding index
-      fold = sample(1:n_folds,n,replace=T)
-      predictions = data.frame(matrix(NA,nrow=n, ncol = length(unique(W))))
-      
-      # cross validation
-      for (f in 1:n_folds){
-        
-        # fit model 
-        model <- do.call(method$fit, list(x = X[fold != f,], y = W[fold != f], params))
-        #print(paste0("Model param lambda = ", model$lambda))
-        #print(paste0("Grid param lambda = ", params$lambda))
-        
-        # predict
-        predictions[fold == f,] <- do.call(method$predict,
-                                           list(model, X[fold != f,], W[fold != f], xnew = X[fold == f,]))
-        
-      }
-      bs_iter[j] <- brier_score(probabilities = predictions, outcome = y)
-      
+      # predict
+      predictions[fold == f,] <- do.call(method$predict,
+                                         list(model, X[fold != f,], W[fold != f], xnew = X[fold == f,]))
       
     }
-    # only store average over iterations
-    bs_mat[i, 'BS'] <- mean(bs_iter)
+      
+    # only store brier score
+    bs_mat[i, 'BS'] <- brier_score(probabilities = predictions, outcome = y)
   }
   
   best_params <- bs_mat[which.min(bs_mat$BS), ]
