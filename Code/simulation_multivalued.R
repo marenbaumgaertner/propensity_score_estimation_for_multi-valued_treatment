@@ -8,11 +8,11 @@ options(scipen= 999)
 
 
 # Set the number of simulations and number of cross folds
-n_rep <- 5
+n_rep <- 2
 n_folds <- 5
 
 # Set your list of classifiers
-classifiers <- c(
+classifiers <- c("ovo", "ovr",
   "knn", "knn_radius", "lda", "logit", "logit_nnet",
   "mlpc", "nb_bernulli", "nb_gaussian", 
   "probability_forest", "ranger", "qda", "xgboost"
@@ -66,6 +66,8 @@ for (i in 1:n_rep) {
           params[[col_name]] <- params_raw[[col_name]][1]
         }
       }
+    }else if(classifier %in% c("ovo","ovr")){
+      params = list(method="logit")
     }else{
       params = list()
     }
@@ -73,6 +75,7 @@ for (i in 1:n_rep) {
     # define cross folding index
     fold = sample(1:n_folds,n,replace=T)
     predictions = data.frame(matrix(NA,nrow=n, ncol = length(unique(W))))
+    colnames(predictions) <- seq(1,t,1)
     
     # form cross-fitted prediction for e
     for (f in 1:n_folds){
@@ -112,21 +115,108 @@ saveRDS(results, file = paste0("sim_results/simulation_results_", dataname,"_", 
 
 
 
+#dataname <- "Imbens_2016" ## 1 Sim 15 s
+dataname <- "Linden_2015" ## 1 sim 10 s
+#dataname <- "Archarky_2023"
+
+tuning_results <- readRDS(paste0("sim_results/tuning_results_", dataname, ".rds"))
+tuned_classifiers <- names(tuning_results)
+
+
+# Define the dimensions of the nested structure
+source(paste0("data/data_", dataname,".R"))
+
+n = nrow(X)
+t = length(unique(W))
+
+results <- vector("list", length = length(classifiers) + 1)
+names(results)[1:(length(classifiers) + 1)] <- c(classifiers, "outcome")
+
+# track overall execution time
+start_time <- Sys.time()  # Record start time
+
+# Loop through simulations and then through classifiers
+for (i in 1:n_rep) {
+  print(paste0("iteration ",i, " of ", n_rep)) # to keep track of execution
+  
+  # generate new data for each iteration
+  source(paste0("data/data_", dataname,".R"))
+  n = nrow(X)
+  
+  # store generated data set
+  results[["outcome"]][[i]] <- dataset
+  
+  for (c in seq_along(classifiers)) {
+    classifier <- classifiers[c]
+    #print(classifier)
+    
+    if (classifier %in% tuned_classifiers){
+      params_raw <- tuning_results[[classifier]]$best_params
+      params_raw$BS <- NULL
+      rownames(params_raw) <- NULL
+      params <- list()
+      # Store tuning parameters
+      for (col_name in colnames(params_raw)) {
+        if (is.factor(params_raw[[col_name]])) {
+          params[[col_name]] <- as.character(params_raw[[col_name]][1])
+        } else {
+          params[[col_name]] <- params_raw[[col_name]][1]
+        }
+      }
+    }else if(classifier %in% c("ovo","ovr")){
+      params = list(method="logit")
+    }else{
+      params = list()
+    }
+    
+    # define cross folding index
+    fold = sample(1:n_folds,n,replace=T)
+    predictions = data.frame(matrix(NA,nrow=n, ncol = length(unique(W))))
+    colnames(predictions) <- seq(1,t,1)
+    
+    # form cross-fitted prediction for e
+    for (f in 1:n_folds){
+      
+      # fit model 
+      model <- do.call(paste0(classifier, "_fit"), list(x = X[fold != f,], y = W[fold != f], params))
+      
+      # predict
+      predictions[fold == f,] <- do.call(paste0("predict.", classifier, "_fit"),
+                                         list(model, X[fold != f,], W[fold != f], xnew = X[fold == f,]))
+      
+    }
+    # Store the results
+    results[[c]][[i]] <- predictions
+  }
+}
+
+end_time <- Sys.time()  # Record end time
+elapsed_time <- end_time - start_time
+cat(n_rep, "Simulations:", "elapsed time:", elapsed_time, "\n")
+
+# Now, all_results is a list of lists, with each inner list containing predictions for each simulation of a specific classifier
+
+# If you want to do something with the results, you can loop through the list
+# For example, printing the mean of predictions from each simulation for each classifier
+#for (c in seq_along(classifiers)) {
+#  for (i in 1:n_rep) {
+#    cat("Classifier:", classifiers[c], "- Simulation", i, "- Mean Prediction:", mean(all_results[[c]][[i]][[1]]), "\n")
+#  }
+#}
+#
+#all_results[[1]][[1]][[1]]
+
+# If you want to save the results to a file, you can use saveRDS or any other suitable method
+# For example, saving the results as an RDS file
+saveRDS(results, file = paste0("sim_results/simulation_results_", dataname,"_", n_rep, ".rds"))
 
 
 
 
 
 
-
-
-
-
-
-
-
-
-
+rm(list = ls())
+gc()
 
 
 

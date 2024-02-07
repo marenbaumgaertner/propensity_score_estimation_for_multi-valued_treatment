@@ -125,21 +125,21 @@ kl_convergence <- function(p, q_matrix) {
   p <- p / sum(p) # Normalize p to sum to 1
   K <- length(p)
   total_divergence <- 0
-  
+
   for (i in 1:(K-1)) {
     for (j in (i+1):K) {
       u_ij <- p[i] / (p[i] + p[j] + epsilon)
       r_ij <- q_matrix[i, j]
       
       if (!is.na(r_ij)) {
-        l <- l + 
+        total_divergence <- total_divergence + 
           r_ij * log((r_ij + epsilon) / (u_ij + epsilon)) + 
           (1 - r_ij) * log(((1 - r_ij) + epsilon) / ((1 - u_ij) + epsilon)) 
       }
     }
   }
   
-  return(l)
+  return(total_divergence)
 }
 
 

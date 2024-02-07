@@ -1099,7 +1099,7 @@ predict.logit_nnet_fit = function(multinom_fit, x,y,xnew=NULL,weights=FALSE){
 
 
 # Function to create a one-vs-one classifier
-ovo_fit <- function(x, y, classifier = "logit") {
+ovo_fit <- function(x, y, method = "logit") {
   class_labels <- sort(unique(y))
   num_classes <- length(class_labels)
   ovo_classifiers <- list()
@@ -1113,13 +1113,13 @@ ovo_fit <- function(x, y, classifier = "logit") {
       subset_x <- x[y %in% c(class_i, class_j),]
       subset_y <- y[y %in% c(class_i, class_j)]
       
-      if (classifier=="xgboost"){
+      if (method=="xgboost"){
         subset_y <- ifelse(subset_y == i, 1, 0)
         
       }
       # @Maren: change to ml_methods[[ml]]
       ovo_classifiers[[paste(class_i, class_j, sep = "_")]] <- do.call(
-        paste0(classifier, "_fit"),
+        paste0(method, "_fit"),
         list(y = subset_y,
              x = subset_x)
       )
@@ -1183,7 +1183,7 @@ ovo_fit <- function(x, y, classifier = "logit") {
 #}
 
 
-predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, classifier = "logit") {
+predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, method = "logit") {
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
     warning("Weights are not supported for propensity score estimation.")
@@ -1206,7 +1206,7 @@ predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, classifier = "
     #print(paste0("classifier ", i))
     
     # Predict probabilities using the i-th binary classifier
-    fit_raw <- do.call(paste0("predict.", classifier,  "_fit"), 
+    fit_raw <- do.call(paste0("predict.", method,  "_fit"), 
                        list(ovo_fit[[i]], x=x, y=subset_y, xnew = xnew))
     
     
@@ -1248,10 +1248,12 @@ predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, classifier = "
 
 
 # One-vs-Rest Classifier
-ovr_fit <- function(x, y, classifier = "logit") {
+ovr_fit <- function(x, y, method = "logit") {
   class_labels <- sort(unique(y))
   num_classes <- length(class_labels)
   ovr_classifiers <- list()
+  
+  if (min(y)==0) y = y+1
   
   # Create binary classifiers for each pair of classes
   for (i in 1:(num_classes)) {
@@ -1261,7 +1263,7 @@ ovr_fit <- function(x, y, classifier = "logit") {
       
       # @Maren: change to ml_methods[[ml]]
       ovr_classifiers[[paste(class_i)]] <- do.call(
-        paste0(classifier, "_fit"),
+        paste0(method, "_fit"),
         list(y = binarized_y, x = x)
       )
   }
@@ -1270,7 +1272,7 @@ ovr_fit <- function(x, y, classifier = "logit") {
 }
 
 
-predict.ovr_fit <- function(ovr_fit,x,y, xnew=NULL,weights=FALSE, classifier = "logit") {
+predict.ovr_fit <- function(ovr_fit,x,y, xnew=NULL,weights=FALSE, method = "logit") {
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
     warning("Weights are not supported for propensity score estimation.")
@@ -1289,10 +1291,15 @@ predict.ovr_fit <- function(ovr_fit,x,y, xnew=NULL,weights=FALSE, classifier = "
     #print(paste0("classifier ", i))
     # Predict probabilities using the i-th binary classifier
     # @Maren: change to ml_methods[[ml]]
-    fit_raw <- do.call(paste0("predict.", classifier,  "_fit"), 
-                       list(model[[i]], x=x, y=binarized_y, xnew = xnew))$prediction
-
-    fit_raw = as_tibble(fit_raw) %>% select("1") 
+    fit_raw <- do.call(paste0("predict.", method,  "_fit"), 
+                       list(model[[i]], x=x, y=binarized_y, xnew = xnew))#$prediction
+    #print(colnames(fit_raw))
+    
+    if (ncol(fit_raw)==2){
+      fit_raw = as_tibble(fit_raw) %>% select("1") 
+    }else{
+      fit_raw <- as_tibble(fit_raw)
+    }
 
 
     # Update the corresponding columns in e_hat
