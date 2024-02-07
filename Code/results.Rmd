@@ -1,0 +1,51 @@
+---
+title: "Evaluation of Simulation results"
+author: "Maren Baumgärtner"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+    code_folding: show
+---
+
+```{r, message=FALSE, echo=FALSE,warning=FALSE}
+source("packages.R")
+```
+
+```{r}
+source("eval_functions.R")
+
+set.seed(42)
+options(scipen= 999)
+```
+
+# Load simulation results
+
+```{r}
+dataname <- "Imbens_2016"
+n_rep <- 5
+
+
+sim_results <- readRDS(paste0("sim_results/simulation_results_", dataname,"_", n_rep, ".rds"))
+classifiers <- names(sim_results)
+classifiers <- classifiers[!(classifiers %in% c("outcome"))]
+```
+
+# Compute average Brier Score
+
+```{r}
+bs_mat <- matrix(NA, nrow=n_rep, ncol = length(classifiers))
+colnames(bs_mat) <- classifiers
+for (c in seq_along(classifiers)) {
+  classifier <- classifiers[c]
+  print(classifier)
+  for (i in 1:n_rep){
+    bs <- brier_score(sim_results[[c]][[i]], sim_results[["outcome"]][[i]]$W, binary = FALSE)
+    bs_mat[i, c] <- bs
+  }
+}
+```
+
+```{r}
+kable(colMeans(bs_mat))
+```
