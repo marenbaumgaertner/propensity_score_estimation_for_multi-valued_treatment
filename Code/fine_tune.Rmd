@@ -80,9 +80,8 @@ X_test <-     as.matrix(data.frame(X[!split_indices, ]))
 ```{r}
 #dataname <- "Imbens_2016"
 #dataname <- "Linden_2015"
-dataname <- "Archarky_2023"
-datapath <- paste0("data/real_data_", dataname,".R")
-#datapath <- paste0("data/simulate_data_", dataname,".R")
+#dataname <- "Archarky_2023"
+datapath <- paste0("data/data_", dataname,".R")
 source(datapath)
 X <- as.matrix(X)
 ```
@@ -163,6 +162,8 @@ multinomial_logit_nnet$grid <- expand.grid(decay = seq(0,1,0.05))
 -   kmax: number of neighbors considered
 
 -   distance: parameter of Minkowski distance
+
+kknn() function tunes itself 
 
 ```{r}
 knn <- list(type = "Classification",
@@ -248,8 +249,8 @@ probability_forest_grf <- list(
     type = "Classification",
     library = "grf",
     multiclass = TRUE,
-    params = data.frame(parameter = c("mtry", "min.node.size", "alpha", "imbalance.penalty"), 
-                        class = rep("numeric",4), 
+    params = data.frame(parameter = c("mtry", "min.node.size", "alpha", "imbalance.penalty", "num.trees"), 
+                        class = rep("numeric",5), 
                         label = c("Number of variables tried for each split",
                                   "minimum number of observations in each tree leaf",
                                   "controls maximum imbalance of split",
@@ -259,7 +260,8 @@ probability_forest_grf <- list(
     predict = predict.probability_forest_fit,
     grid = expand.grid(min.node.size = seq(5, 20, 5),
                        alpha = seq(0,0.1,0.03),
-                       imbalance.penalty = seq(0,1,0.5)
+                       imbalance.penalty = seq(0,1,0.5),
+                       num.trees=1000
     )
     )
 ```
@@ -286,7 +288,8 @@ probability_forest_ranger <- list(
     replace = c(TRUE, FALSE),                               
     sample.fraction = c(.5, .63, .8, 1),
     splitrule = c("gini", "extratrees"),
-    importance = c('none', 'impurity', 'impurity_corrected', 'permutation')
+    importance = c('none', 'impurity', 'impurity_corrected', 'permutation'),
+    num.trees = 1000
 )
 )
 ```
@@ -315,7 +318,7 @@ mlpc <- list(
 -   min_child_weight: minimum sum of instance weight (hessian) needed in a child
 
 ```{r}
-xgboost <- list(
+xgboost_method <- list(
   type = "Classification",
   library = "xgboost",
   multiclass = TRUE,
@@ -326,14 +329,14 @@ xgboost <- list(
   predict = predict.xgboost_fit,
   grid = expand.grid(eta = c(0.001,0.01,0.1,0.2),
                      gamma = seq(0,1,0.2),
-                     nround = seq(5, 40, 5),
+                     nround = seq(5, 100, 5),
                      min_child_weight = seq(0,2,0.5),
                      max_depth = seq(3,10,2),
                      subsample = c(0.5,0.7,1))
 )
 # Randomly select 1000 rows
-random_sample_indices <- sample(nrow(xgboost$grid), 1000, replace = FALSE)
-xgboost$grid <- xgboost$grid[random_sample_indices, ]
+random_sample_indices <- sample(nrow(xgboost_method$grid), 1000, replace = FALSE)
+xgboost_method$grid <- xgboost_method$grid[random_sample_indices, ]
 
 ```
 
@@ -350,25 +353,25 @@ For each grid point, the function splits the data into training and validation s
 Finally, the function identifies the set of parameters that resulted in the lowest average Brier Score and returns both the matrix of performance scores (**`bs_mat`**) and the best parameters (**`best_params`**) as output.
 
 ```{r, message=FALSE}
-best_logit <- finetuning_soft_classifier(x=X, y=W , method=multinomial_logit)
+best_logit <- finetuning_soft_classifier(x=X, y=W , method=multinomial_logit) #parses params
 
-best_logit_nnet <- finetuning_soft_classifier(x=X , y=W , method=multinomial_logit_nnet)
+best_logit_nnet <- finetuning_soft_classifier(x=X , y=W , method=multinomial_logit_nnet) #parses params
 
-best_knn <- finetuning_soft_classifier(x=X, y=W , method=knn)
+best_knn <- finetuning_soft_classifier(x=X, y=W , method=knn) #parses params
 
 #best_knn_radius <- finetuning_soft_classifier(x=X, y=W , method=knn_radius)
 
-best_nb_bernulli <- finetuning_soft_classifier(x=X, y=W , method=nb_bernulli)
+best_nb_bernulli <- finetuning_soft_classifier(x=X, y=W , method=nb_bernulli) #parses params
 
 #best_nb_gaussian <- finetuning_soft_classifier(x=X, y=W , method=nb_gaussian)
 
-best_probability_forest_grf <- finetuning_soft_classifier(x=X, y=W, method=probability_forest_grf)
+best_probability_forest_grf <- finetuning_soft_classifier(x=X, y=W, method=probability_forest_grf) #parses params
 
-best_probability_forest_ranger <- finetuning_soft_classifier(x=X, y=W, method=probability_forest_ranger)
+best_probability_forest_ranger <- finetuning_soft_classifier(x=X, y=W, method=probability_forest_ranger) #parses params
 
-best_mlpc <- finetuning_soft_classifier(x=X, y=W, method=mlpc)
+best_mlpc <- finetuning_soft_classifier(x=X, y=W, method=mlpc) #parses params
 
-best_xgboost <- finetuning_soft_classifier(x=X, y=W, method=xgboost)
+best_xgboost <- finetuning_soft_classifier(x=X, y=W, method=xgboost_method)
 
 ```
 
@@ -397,14 +400,37 @@ best_xgboost$best_params
 
 
 ```{r}
-tuning_results <- list(best_knn, best_logit, best_logit_nnet, best_nb_bernulli, best_probability_forest_grf, best_probability_forest_ranger, best_mlpc)
+tuning_results <- list(best_knn, best_logit, best_logit_nnet, best_nb_bernulli, best_probability_forest_grf, best_probability_forest_ranger, best_mlpc, best_xgboost)
+names(tuning_results)[1:8] <- c("knn", "logit", "logit_nnet", "nb_bernulli", "probability_forest", "ranger", "mlpc", "xgboost")
 
 # Save the data.table to a file using saveRDS
 saveRDS(tuning_results, file = paste0("sim_results/tuning_results_", dataname, ".rds"))
 
 # Load the data.table back
-#loaded_nested_dt <- readRDS("tuning_results_imbens.rds")
+tuning_results <- readRDS(paste0("sim_results/tuning_results_", dataname, ".rds"))
+tuning_results['xgboost'] <- list(best_xgboost)
+```
 
+
+
+```{r}
+t <- length(unique(W))
+t <- 50
+random_guess <- ((1-(1/t))^2 + (t-1)*((1/t)^2) )/t
+
+tuning_results$logit$best_params
+tuning_results$logit_nnet$best_params 
+tuning_results$knn$best_params
+tuning_results$nb_bernulli$best_params
+tuning_results$probability_forest$best_params
+tuning_results$ranger$best_params
+tuning_results$mlpc$best_params
+tuning_results$xgboost$best_params
+
+
+m <- xgboost(data = X[fold != f,], label = W[fold != f]-1, nrounds = 10, max_depth=10)
+m_docall <- do.call(xgboost)
+m <- xgboost_fit(x= X[fold != f,], y = W[fold != f], args=list(nrounds=10))
 ```
 
 # Binary only
@@ -456,7 +482,7 @@ svm <- list(
   type = "Classification",
   library = "e1017",
   multiclass = TRUE,
-  params = data.frame(parameter = c(""), class = c("numeric"), label = c("")),
+  params = data.frame(parameter = c("gamma"), class = c("numeric"), label = c("")),
   fit = svm_fit,
   predict = predict.svm_fit,
   grid = expand.grid()

@@ -441,33 +441,34 @@ predict.nb_bernulli_fit = function(nb_bernulli_fit,x,y,xnew=NULL,weights=FALSE){
 #'
 
 # seems not to work with the do.call() function
-#xgboost_fit = function(x,y,args=list()){
-#  K = length(unique(y))
-#  if (K==2){
-#     model = do.call(xgboost, c(list(data=x,label=y, nrounds=10, 
-#                                     objective = "binary:logistic", eval_metric = "logloss", max_depth = 5),args)
-#  }else{
-#    y = y-1
-#    model = do.call(xgboost, c(list(data=x,label=y, nrounds=10, num_class = K, objective = "multi:softprob", eval_metric = "mlogloss", max_depth = 5),args)
-#  }
-#  
-#  model
-#}
-
-xgboost_fit <- function(x, y, args=list()) {
-  K <- length(unique(y))
-  
-  if (K == 2) {
-    model <- xgboost(data = x, label = y, nrounds = 10,
-                     objective = "binary:logistic", eval_metric = "logloss", max_depth = 5, verbose=0, args)
-  } else {
+xgboost_fit = function(x,y,args=list(nrounds=40)){
+  K = length(unique(y))
+  if (K==2){
+     model = do.call(xgboost, c(list(data=x,label=y, verbose=0,
+                                     objective = "binary:logistic", eval_metric = "logloss"),args))
+  }else{
     if (min(y)==1) y <- y - 1
-    model <- xgboost(data = x, label = y, nrounds = 10, num_class = K,
-                     objective = "multi:softprob", eval_metric = "mlogloss", max_depth = 5, verbose=0, args)
+    model = do.call(xgboost, c(list(data=x,label=y, num_class = K, verbose=0,
+                                    objective = "multi:softprob", eval_metric = "mlogloss"),args))
   }
   
   model
 }
+
+#xgboost_fit <- function(x, y, args=list()) {
+#  K <- length(unique(y))
+#  
+#  if (K == 2) {
+#    model <- xgboost(data = x, label = y, nrounds = 100,
+#                     objective = "binary:logistic", eval_metric = "logloss", max_depth = 5, verbose=0, args)
+#  } else {
+#    if (min(y)==1) y <- y - 1
+#    model <- xgboost(data = x, label = y, nrounds = 100, num_class = K,
+#                     objective = "multi:softprob", eval_metric = "mlogloss", max_depth = 5, verbose=0, args)
+#  }
+#  
+#  model
+#}
 
 #' Prediction based on xgboost model.
 #' @param xgboost_fit Output of \code{\link{xgboost}} or \code{\link{xgboost_fit}}
@@ -511,15 +512,15 @@ predict.xgboost_fit = function(xgboost_fit,x,y,xnew=NULL,weights=FALSE){
 #'
 #' @param x Covariate matrix of training sample
 #' @param y Vector of outcomes of training sample
-#' @param args List of arguments passed to  \code{\link{xgboost}}
-#' @import xgboost
+#' @param args List of arguments passed to  \code{\link{svm}}
+#' @import e1071
 #'
 #' @return An object with S3 method for class 'svm'
 #'
 
-svm_fit = function(x,y,args=list()){
+svm_fit = function(x,y,args=list(gamma = 0.1)){
   model = do.call(svm, c(list(y = y, x = x, probability = TRUE, kernel = "sigmoid", 
-                              type = 'C-classification', gamma = 0.1), args))
+                              type = 'C-classification'), args))
   return(model)
 }
 
@@ -685,14 +686,14 @@ predict.probability_forest_fit = function(probability_forest_fit, x,y,xnew=NULL,
 #'
 #' @keywords internal
 #'
-bagging_fit = function(x, y, args = list()) {
+bagging_fit = function(x, y, args = list(eta = 0.3, 
+                                         max_depth = 2,
+                                         minsplit = 10)) {
   data <- data.frame(y = as.factor(y), x)
   model = do.call(bagging, c(list(formula = y ~ ., data = data,
                                   mfinal = 50,
                                   control = rpart.control(objective = "binary:logistic",
                                                           eval_metric = "rmse",
-                                                          eta = 0.3, max_depth = 2,
-                                                          minsplit = 10,  # Adjust minsplit to an appropriate value
                                                           cp = -1
                                   )), args))
   model
@@ -793,9 +794,9 @@ predict.bagging_fit = function(bagging_fit,x,y,xnew=NULL,weights=FALSE){
 #'
 #' @keywords internal
 #'
-adaboost_fit = function(x,y,args=list()){
+adaboost_fit = function(x,y,args=list(nIter=20)){
   data <- data.frame(y = as.factor(y), x)
-  model = do.call(adaboost ,c(list(data=data, formula = y ~ ., nIter=20, loss="logistic", w=NULL), args))
+  model = do.call(adaboost ,c(list(data=data, formula = y ~ ., , loss="logistic", w=NULL), args))
   model
 }
 #' Prediction based on Adaboost.M1 model.
@@ -837,11 +838,12 @@ predict.adaboost_fit = function(adaboost_fit, x,y,xnew=NULL,weights=FALSE){
 #' @keywords internal
 #'
 # @Maren: kmax depedent on # classes?
-knn_fit = function(x,y,args=list()){ # args=list(kmax=floor(0.05*nrow(x)))
+knn_fit = function(x,y,args=list(kmax=floor(0.05*nrow(x)))){ 
   data <- data.frame(y = as.factor(y), x)
   model = do.call(train.kknn ,c(list(formula = y ~ ., data = data), args)) # args
   model
 }
+
 #' Prediction based on k-Nearest Neighbor model.
 #' @param knn_fit Output of \code{\link{kknn}} or \code{\link{knn_fit}}
 #' @param x Covariate matrix of training sample
@@ -1005,7 +1007,9 @@ predict.bart_fit = function(bart_fit, x,y,xnew, weights=FALSE){
 #'
 #' @keywords internal
 #'
-ranger_fit = function(x,y,args=list()){ #args=list(min.node.size=0.1*nrow(x), mtry=ceiling(sqrt(ncol(x))))
+ranger_fit = function(x,y,args=list(num.trees = 1000,
+                                    min.node.size=0.1*nrow(x), 
+                                    mtry=ceiling(sqrt(ncol(x))))){ #args=list()
   data <- data.frame(y = as.factor(y), x)
 
   model = do.call(ranger, c(list(data=data, formula= y~., probability=TRUE), args))
@@ -1052,7 +1056,7 @@ predict.ranger_fit = function(ranger_fit, x,y,xnew=NULL,weights=FALSE){
 #'
 #' @return An object with S3 method for class 'nnet'
 #'
-multinom_fit = function(x,y,args=list()){
+logit_nnet_fit = function(x,y,args=list()){
   data <- data.frame(y = as.factor(y), x)
   
   model = do.call(multinom, c(list(data=data, formula= y~., model=TRUE), args))
@@ -1071,7 +1075,7 @@ multinom_fit = function(x,y,args=list()){
 #'
 #' @keywords internal
 #'
-predict.multinom_fit = function(multinom_fit, x,y,xnew=NULL,weights=FALSE){
+predict.logit_nnet_fit = function(multinom_fit, x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
     warning("Weights are not supported for propensity score estimation.")
