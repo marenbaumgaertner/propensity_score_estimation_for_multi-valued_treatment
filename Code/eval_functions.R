@@ -39,6 +39,23 @@ brier_score <- function(probabilities, outcome, binary = TRUE){
   
 }
 
+cross_entropy <- function(probabilities, outcome) {
+  #  Adjust indices since R indexing starts from 1 if necessary
+  if (min(outcome)==0) outcome = outcome + 1
+  
+  if(unique(ncol(probabilities) == length(unique(outcome)))){
+    # Select the predicted probabilities corresponding to true classes
+    probs <- probabilities[cbind(1:n, outcome)] 
+    
+    # compute logarithm loss and divide by number of observations
+    ll = -sum(log(probs))/length(outcome)
+  }else{
+    stop("Error: Probabilities matrix does not match outcome classes.")
+  }
+  
+  
+  return(ll)
+}
 
 
 make_calibtation_plot <- function(probabilities, outcome, method) {
