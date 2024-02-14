@@ -23,12 +23,13 @@ options(scipen= 999)
 
 ```{r}
 dataname <- "Imbens_2016"
-n_rep <- 5
+n_rep <- 200
 
 
-sim_results <- readRDS(paste0("sim_results/simulation_results_", dataname,"_", n_rep, ".rds"))
+sim_results <- readRDS(paste0("sim_results/simulation_results_", dataname,"_", n_rep, "_new.rds"))
 classifiers <- names(sim_results)
-classifiers <- classifiers[!(classifiers %in% c("outcome"))]
+#classifiers <- classifiers[!(classifiers %in% c("outcome"))]
+classifiers <- c("kNN", "LDA", "Multinimial logit (glmnet)", "Multinimial logit (nnet)", "MLPC", "Naive Bayes (Bernulli)", "Naive Bayes (Gaussian)", "Probability forest (grf)", "Probability forest (ranger)", "QDA", "XGBoost")
 ```
 
 # Compute average Brier Score
@@ -36,16 +37,150 @@ classifiers <- classifiers[!(classifiers %in% c("outcome"))]
 ```{r}
 bs_mat <- matrix(NA, nrow=n_rep, ncol = length(classifiers))
 colnames(bs_mat) <- classifiers
+ll_mat <- matrix(NA, nrow=n_rep, ncol = length(classifiers))
+colnames(ll_mat) <- classifiers
+n=length(sim_results$outcome[[1]]$W)
 for (c in seq_along(classifiers)) {
   classifier <- classifiers[c]
-  print(classifier)
   for (i in 1:n_rep){
     bs <- brier_score(sim_results[[c]][[i]], sim_results[["outcome"]][[i]]$W, binary = FALSE)
     bs_mat[i, c] <- bs
+    
+    ll <- cross_entropy(sim_results[[c]][[i]], sim_results[["outcome"]][[i]]$W)
+    ll_mat[i, c] <- ll
   }
 }
 ```
 
 ```{r}
-kable(colMeans(bs_mat))
+kable(cbind(round(colMeans(bs_mat),4), round(colMeans(ll_mat),4)), col.names = c("Classifier", "BS", "LL"), caption = "Mean")
+kable(cbind(colMedians(bs_mat), colMedians(ll_mat)), col.names = c("Classifier", "BS", "LL"), caption = "Median")
+
 ```
+
+
+
+```{r}
+bs_long <- bs_mat %>%
+  as.data.frame() %>%
+  select(-c("kNN")) %>% 
+  pivot_longer(cols = everything()) 
+
+K <- length(unique(sim_results$outcome[[1]]$W))
+BS_random <- (((1/K)-1)^2 + (K-1)*((1/K)^2))/K
+
+  
+ggplot(bs_long, aes(x = value, y = name, fill = name)) +
+  geom_density_ridges(show.legend = FALSE) +
+  geom_vline(xintercept = BS_random, color="black", linetype = "dashed") +
+  scale_fill_paletteer_d("palettetown::delcatty", direction = 1, dynamic = FALSE) +
+  labs(y="", x="Brier Score") +
+  theme_bw()
+```
+
+```{r}
+dataname <- "Linden_2015"
+n_rep <- 200
+
+
+sim_results <- readRDS(paste0("sim_results/simulation_results_", dataname,"_", n_rep, "_new.rds"))
+#classifiers <- names(sim_results)
+#classifiers <- classifiers[!(classifiers %in% c("outcome"))]
+
+bs_mat <- matrix(NA, nrow=n_rep, ncol = length(classifiers))
+colnames(bs_mat) <- classifiers
+ll_mat <- matrix(NA, nrow=n_rep, ncol = length(classifiers))
+colnames(ll_mat) <- classifiers
+n=length(sim_results$outcome[[1]]$W)
+for (c in seq_along(classifiers)) {
+  classifier <- classifiers[c]
+  for (i in 1:n_rep){
+    bs <- brier_score(sim_results[[c]][[i]], sim_results[["outcome"]][[i]]$W, binary = FALSE)
+    bs_mat[i, c] <- bs
+    
+    ll <- cross_entropy(sim_results[[c]][[i]], sim_results[["outcome"]][[i]]$W)
+    ll_mat[i, c] <- ll
+  }
+}
+```
+
+
+```{r}
+kable(cbind(round(colMeans(bs_mat),4), round(colMeans(ll_mat),4)), col.names = c("Classifier", "BS", "LL"), caption = "Mean")
+kable(cbind(colMedians(bs_mat), colMedians(ll_mat)), col.names = c("Classifier", "BS", "LL"), caption = "Median")
+```
+
+
+```{r}
+bs_long <- bs_mat %>%
+  as.data.frame() %>%
+  select(-c("kNN")) %>% 
+  pivot_longer(cols = everything()) 
+  
+K <- length(unique(sim_results$outcome[[1]]$W))
+BS_random <- (((1/K)-1)^2 + (K-1)*((1/K)^2))/K
+
+  
+ggplot(bs_long, aes(x = value, y = name, fill = name)) +
+  geom_density_ridges(show.legend = FALSE) +
+  geom_vline(xintercept = BS_random, color="black", linetype = "dashed") +
+  scale_fill_paletteer_d("palettetown::spearow", direction = 1, dynamic = FALSE) +
+  labs(y="", x="Brier Score") +
+  theme_bw()
+```
+
+
+
+```{r}
+dataname <- "Acharky_2023"
+n_rep <- 200
+
+
+sim_results <- readRDS(paste0("sim_results/simulation_results_", dataname,"_", n_rep, "_new.rds"))
+#classifiers <- names(sim_results)
+#classifiers <- classifiers[!(classifiers %in% c("outcome"))]
+
+bs_mat <- matrix(NA, nrow=n_rep, ncol = length(classifiers))
+colnames(bs_mat) <- classifiers
+ll_mat <- matrix(NA, nrow=n_rep, ncol = length(classifiers))
+colnames(ll_mat) <- classifiers
+n=length(sim_results$outcome[[1]]$W)
+for (c in seq_along(classifiers)) {
+  classifier <- classifiers[c]
+  for (i in 1:n_rep){
+    bs <- brier_score(sim_results[[c]][[i]], sim_results[["outcome"]][[i]]$W, binary = FALSE)
+    bs_mat[i, c] <- bs
+    
+    ll <- cross_entropy(sim_results[[c]][[i]], sim_results[["outcome"]][[i]]$W)
+    ll_mat[i, c] <- ll
+  }
+}
+```
+
+
+```{r}
+kable(cbind(round(colMeans(bs_mat),4), round(colMeans(ll_mat),4)), col.names = c("Classifier", "BS", "LL"), caption = "Mean")
+kable(cbind(colMedians(bs_mat), colMedians(ll_mat)), col.names = c("Classifier", "BS", "LL"), caption = "Median")
+```
+
+
+```{r}
+bs_long <- bs_mat %>%
+  as.data.frame() %>%
+  select(-c("kNN")) %>% 
+  pivot_longer(cols = everything()) 
+
+K <- length(unique(sim_results$outcome[[1]]$W))
+BS_random <- (((1/K)-1)^2 + (K-1)*((1/K)^2))/K
+
+  
+ggplot(bs_long, aes(x = value, y = name, fill = name)) +
+  geom_density_ridges(show.legend = FALSE) +
+  geom_vline(xintercept = BS_random, color="black", linetype = "dashed") +
+  scale_fill_paletteer_d("palettetown::parasect", direction = 1, dynamic = FALSE) +
+  labs(y="", x="Brier Score") +
+  theme_bw()
+
+```
+
+
