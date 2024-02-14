@@ -1,0 +1,135 @@
+---
+title: "Fine Tuning results"
+author: "Maren Baumgärtner"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+    code_folding: show
+---
+
+```{r}
+library(knitr)
+library(dplyr)
+
+# Function to calculate mode or mean
+get_mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+convert_to_numeric_if_possible <- function(x) {
+  if (all(grepl("^\\d+\\.?\\d*$", x))) { # Check if all elements are numeric
+    as.numeric(x)
+  } else {
+    x
+  }
+}
+
+```
+
+
+```{r}
+dataname <- "Imbens_2016"
+#dataname <- "Linden_2015"
+#dataname <- "Archarky_2023"
+n_iter = 10
+results <- readRDS(paste0("sim_results/tuning_results_", dataname, "_", n_iter, "_iterations.rds"))
+
+classifiers_tuned <- names(results[[1]])
+
+final_values <- list()
+for (c in classifiers_tuned){
+  mat <- matrix(NA, nrow = n_iter, ncol = ncol(results[[1]][[c]]$best_params))
+
+  for (i in 1:n_iter){
+    mat[i,] <- as.matrix(results[[i]][[c]]$best_params)
+  }
+  colnames(mat) <- colnames(as.matrix(results[[i]][[c]]$best_params))
+
+mat_mean <- as.data.frame(mat) %>%
+  mutate_all(~convert_to_numeric_if_possible(.)) %>%
+  summarise_all(list(
+    median_numeric = ~if(is.numeric(.)) median(.) else get_mode(.)
+  ))
+
+
+  colnames(mat_mean) <- colnames(mat)
+  final_values[[c]] <- mat_mean
+  print(kable(as.data.frame(mat), caption = c))
+  print(kable(as.data.frame(final_values[[c]]), caption = c))
+
+}
+names(final_values) <- classifiers_tuned
+saveRDS(final_values, file = paste0("sim_results/final_tuning_results_", dataname, ".rds"))
+
+
+```
+
+```{r}
+#dataname <- "Imbens_2016"
+dataname <- "Linden_2015"
+#dataname <- "Archarky_2023"
+n_iter = 10
+results <- readRDS(paste0("sim_results/tuning_results_", dataname, "_", n_iter, "_iterations.rds"))
+
+final_values <- list()
+for (c in classifiers_tuned){
+  mat <- matrix(NA, nrow = n_iter, ncol = ncol(results[[1]][[c]]$best_params))
+
+  for (i in 1:n_iter){
+    mat[i,] <- as.matrix(results[[i]][[c]]$best_params)
+  }
+  colnames(mat) <- colnames(as.matrix(results[[i]][[c]]$best_params))
+
+mat_mean <- as.data.frame(mat) %>%
+  mutate_all(~convert_to_numeric_if_possible(.)) %>%
+  summarise_all(list(
+    median_numeric = ~if(is.numeric(.)) median(.) else get_mode(.)
+  ))
+
+
+  colnames(mat_mean) <- colnames(mat)
+  final_values[[c]] <- mat_mean
+  print(kable(as.data.frame(mat), caption = c))
+  print(kable(as.data.frame(final_values[[c]]), caption = c))
+
+}
+names(final_values) <- classifiers_tuned
+saveRDS(final_values, file = paste0("sim_results/final_tuning_results_", dataname, ".rds"))
+
+```
+
+```{r}
+#dataname <- "Imbens_2016"
+#dataname <- "Linden_2015"
+dataname <- "Acharky_2023"
+n_iter = 8
+results <- readRDS(paste0("sim_results/tuning_results_", dataname, "_", n_iter, "_iterations.rds"))
+
+final_values <- list()
+for (c in classifiers_tuned){
+  mat <- matrix(NA, nrow = n_iter, ncol = ncol(results[[1]][[c]]$best_params))
+
+  for (i in 1:n_iter){
+    mat[i,] <- as.matrix(results[[i]][[c]]$best_params)
+  }
+  colnames(mat) <- colnames(as.matrix(results[[i]][[c]]$best_params))
+
+mat_mean <- as.data.frame(mat) %>%
+  mutate_all(~convert_to_numeric_if_possible(.)) %>%
+  summarise_all(list(
+    median_numeric = ~if(is.numeric(.)) median(.) else get_mode(.)
+  ))
+
+
+  colnames(mat_mean) <- colnames(mat)
+  final_values[[c]] <- mat_mean
+  print(kable(as.data.frame(mat), caption = c))
+  print(kable(as.data.frame(final_values[[c]]), caption = c))
+
+}
+names(final_values) <- classifiers_tuned
+saveRDS(final_values, file = paste0("sim_results/final_tuning_results_", dataname, ".rds"))
+
+```
