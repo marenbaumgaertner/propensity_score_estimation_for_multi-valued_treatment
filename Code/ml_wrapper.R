@@ -796,7 +796,7 @@ predict.bagging_fit = function(bagging_fit,x,y,xnew=NULL,weights=FALSE){
 #'
 adaboost_fit = function(x,y,args=list(nIter=20)){
   data <- data.frame(y = as.factor(y), x)
-  model = do.call(adaboost ,c(list(data=data, formula = y ~ ., , loss="logistic", w=NULL), args))
+  model = do.call(adaboost ,c(list(data=data, formula = y ~ ., loss="logistic", w=NULL), args))
   model
 }
 #' Prediction based on Adaboost.M1 model.
@@ -1100,9 +1100,14 @@ predict.logit_nnet_fit = function(multinom_fit, x,y,xnew=NULL,weights=FALSE){
 
 # Function to create a one-vs-one classifier
 ovo_fit <- function(x, y, method = "logit") {
+  
+  if (min(y)==0) y = y+1
+  
   class_labels <- sort(unique(y))
   num_classes <- length(class_labels)
   ovo_classifiers <- list()
+  
+  
   
   # Create binary classifiers for each pair of classes
   for (i in 1:(num_classes - 1)) {
@@ -1193,6 +1198,8 @@ predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, method = "logi
   n_samples <- nrow(xnew)
   n_classes <- length(unique(unlist(strsplit(names(ovo_fit), "_"))))
   
+  if (min(y)==0) y = y+1
+  
   # Create an empty q_matrix tensor
   q_matrix_tensor <- array(NA, dim = c(n_samples, n_classes, n_classes))
   
@@ -1209,7 +1216,7 @@ predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, method = "logi
     fit_raw <- do.call(paste0("predict.", method,  "_fit"), 
                        list(ovo_fit[[i]], x=x, y=subset_y, xnew = xnew))
     
-    
+    if(is.list(fit_raw)) if(!is.data.frame(fit_raw)) fit_raw = fit_raw$prediction
     # Compute probabilities for second class if not provided by default
     # @Maren: check how to add correct colnames
     fit_raw = fit_raw %>% as_tibble()
@@ -1281,7 +1288,9 @@ predict.ovr_fit <- function(ovr_fit,x,y, xnew=NULL,weights=FALSE, method = "logi
   n_classifiers <- length(ovr_fit)
   n_samples <- nrow(xnew)
   n_classes <- n_classifiers
-
+  
+  if (min(y)==0) y = y+1
+  
   # Initialize an empty matrix to store the probabilities
   fit <- matrix(0, nrow = n_samples, ncol = n_classes) %>% as_tibble()
   colnames(fit) <- seq.int(1, n_classes)
@@ -1292,9 +1301,9 @@ predict.ovr_fit <- function(ovr_fit,x,y, xnew=NULL,weights=FALSE, method = "logi
     # Predict probabilities using the i-th binary classifier
     # @Maren: change to ml_methods[[ml]]
     fit_raw <- do.call(paste0("predict.", method,  "_fit"), 
-                       list(model[[i]], x=x, y=binarized_y, xnew = xnew))#$prediction
+                       list(ovr_fit[[i]], x=x, y=binarized_y, xnew = xnew))#$prediction
     #print(colnames(fit_raw))
-    
+    if(is.list(fit_raw)) if(!is.data.frame(fit_raw)) fit_raw = fit_raw$prediction
     if (ncol(fit_raw)==2){
       fit_raw = as_tibble(fit_raw) %>% select("1") 
     }else{
