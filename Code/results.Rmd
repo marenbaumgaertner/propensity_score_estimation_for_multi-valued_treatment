@@ -19,126 +19,256 @@ set.seed(42)
 options(scipen= 999)
 ```
 
-# Load simulation results
+# Imbens_2016
 
 ```{r}
 dataname <- "Imbens_2016"
-n_rep <- 200
+n_rep <- 100
 
 
-sim_results <- readRDS(paste0("sim_results/simulation_results_", dataname,"_", n_rep, "_new.rds"))
+sim_results <- readRDS(paste0("sim_results/simulation_results_ovo_", dataname,"_", n_rep, ".rds"))
 classifiers <- names(sim_results)
-#classifiers <- classifiers[!(classifiers %in% c("outcome"))]
-classifiers <- c("kNN", "LDA", "Multinimial logit (glmnet)", "Multinimial logit (nnet)", "MLPC", "Naive Bayes (Bernulli)", "Naive Bayes (Gaussian)", "Probability forest (grf)", "Probability forest (ranger)", "QDA", "XGBoost")
+classifiers <- classifiers[!(classifiers %in% c("outcome", "true_e"))]
+classifiers_clean <- c("adaBoost", "bagging" ,"kNN", "LDA", "Multinimial logit (glmnet)", "Multinimial logit (nnet)", "MLPC", "Naive Bayes (Bernulli)", "Naive Bayes (Gaussian)", "Probability forest (grf)", "Probability forest (ranger)", "QDA", "SVM", "XGBoost")
 ```
 
-# Compute average Brier Score
+## Compute average Brier Score
 
 ```{r}
-bs_mat <- matrix(NA, nrow=n_rep, ncol = length(classifiers))
-colnames(bs_mat) <- classifiers
-ll_mat <- matrix(NA, nrow=n_rep, ncol = length(classifiers))
-colnames(ll_mat) <- classifiers
+bs_mat <- matrix(NA, nrow = n_rep, ncol = length(classifiers), dimnames = list(NULL, classifiers))
+ll_mat <- matrix(NA, nrow = n_rep, ncol = length(classifiers), dimnames = list(NULL, classifiers))
+e_mat <- matrix(NA, nrow = n_rep, ncol = length(classifiers), dimnames = list(NULL, classifiers))
+
+bs_mat_true_e <- matrix(NA, nrow=n_rep, ncol = 1)
+
 n=length(sim_results$outcome[[1]]$W)
-for (c in seq_along(classifiers)) {
-  classifier <- classifiers[c]
-  for (i in 1:n_rep){
-    bs <- brier_score(sim_results[[c]][[i]], sim_results[["outcome"]][[i]]$W, binary = FALSE)
-    bs_mat[i, c] <- bs
+for (i in 1:n_rep){
+  bs_mat_true_e[i] <- brier_score(probabilities=sim_results[["true_e"]][[i]], 
+                      outcome=sim_results[["outcome"]][[i]]$W, 
+                      binary = FALSE)
+
+  for (c in seq_along(classifiers)) {
+    classifier <- classifiers[c]
+
+    bs_mat[i, c] <- brier_score(probabilities=sim_results[[classifier]][[i]], 
+                      outcome=sim_results[["outcome"]][[i]]$W, 
+                      binary = FALSE)
     
-    ll <- cross_entropy(sim_results[[c]][[i]], sim_results[["outcome"]][[i]]$W)
-    ll_mat[i, c] <- ll
+    e_mat[i, c] <- mean(rowMeans((sim_results[[classifier]][[i]] - sim_results[["true_e"]][[i]])^2, na.rm = TRUE), na.rm = TRUE)
+
+    ll_mat[i, c] <- cross_entropy(sim_results[[classifier]][[i]], sim_results[["outcome"]][[i]]$W)
   }
 }
 ```
 
 ```{r}
-kable(cbind(round(colMeans(bs_mat),4), round(colMeans(ll_mat),4)), col.names = c("Classifier", "BS", "LL"), caption = "Mean")
-kable(cbind(colMedians(bs_mat), colMedians(ll_mat)), col.names = c("Classifier", "BS", "LL"), caption = "Median")
+kable(cbind(round(colMeans(e_mat),4), round(colMeans(bs_mat),4), round(colMeans(ll_mat),4)), col.names = c("Classifier", "BS", "LL"), caption = "Mean")
+#kable(cbind(colMedians(bs_mat), colMedians(ll_mat)), col.names = c("Classifier", "BS", "LL"), caption = "Median")
 
 ```
 
+## Visualization
 
 
 ```{r}
 bs_long <- bs_mat %>%
   as.data.frame() %>%
-  select(-c("kNN")) %>% 
-  pivot_longer(cols = everything()) 
+  #select(-c("knn","ovo_knn" )) %>% 
+  pivot_longer(cols = everything())  %>%
+  # Separate the 'name' into 'classifier' and 'version' columns
+  mutate(version = case_when(
+           str_detect(name, "^ovr_") ~ "one-vs-rest",
+           str_detect(name, "^ovo_") ~ "one-vs-one",
+           TRUE ~ "multi-class"
+         ),
+         name = gsub("ovr_|ovo_", "", name)
+         ) 
 
 K <- length(unique(sim_results$outcome[[1]]$W))
-BS_random <- (((1/K)-1)^2 + (K-1)*((1/K)^2))/K
-
+BS_unif <- (((1/K)-1)^2 + (K-1)*((1/K)^2))/K
+BS_true <- mean(bs_mat_true_e)
   
-ggplot(bs_long, aes(x = value, y = name, fill = name)) +
-  geom_density_ridges(show.legend = FALSE) +
-  geom_vline(xintercept = BS_random, color="black", linetype = "dashed") +
-  scale_fill_paletteer_d("palettetown::delcatty", direction = 1, dynamic = FALSE) +
-  labs(y="", x="Brier Score") +
-  theme_bw()
+plot1 <- ggplot(bs_long, aes(x = value, y = fct_rev(name), fill = version)) +
+  geom_density_ridges(alpha = 0.9, show.legend = FALSE) +
+  geom_vline(xintercept = BS_unif, color="black", linetype = "dashed") +
+  geom_vline(xintercept = BS_true, color="black", linetype = "dashed") +
+  scale_fill_paletteer_d("tayloRswift::midnightsBloodMoon", direction = 1, dynamic = FALSE) +
+  labs(y="", x="Brier Score", fill="") +
+  theme_bw() +
+  xlim(0.215, 0.25) +
+  scale_y_discrete(labels = rev(classifiers_clean)) +
+  facet_wrap(vars(version))
+plot1
+ggsave(plot1, width = 200, height = 100, units = "mm",
+       filename = "plots/dens1.png")
+
+```
+```{r}
+pi <- sim_results$true_e[[1]]
+true_e <- reshape2::melt(pi, id.vars = NULL, variable.name = "class", value.name = "true") %>% select(true)
+
+bs <- brier_score(probabilities = pi, outcome = sim_results[["outcome"]][[1]]$W)
+ll <- cross_entropy(probabilities = pi, outcome = sim_results[["outcome"]][[1]]$W)
+
+print(paste0("Brier score of ", c, " is ", bs))
+
+
+#for (c in classifiers){
+#  plot(make_calibtation_plot(probabilities = sim_results[[c]][[1]], outcome = sim_results$outcome[[1]]$W, method = c))
+#}
 ```
 
+
+```{r}
+for (c in classifiers){
+  predicted_e <- reshape2::melt(sim_results[[c]][[1]], id.vars = NULL, variable.name = "class", value.name = "prediction")
+
+  plot_data <- cbind(predicted_e, true_e)
+  
+  scatter_plot <- ggplot(data = plot_data,aes(y = prediction, x = true, color=class)) +
+    geom_point(alpha = 0.3) +
+    geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") + 
+    theme_bw() +
+    scale_color_paletteer_d("tayloRswift::midnightsBloodMoon", direction = 1, dynamic = FALSE) +
+    labs(
+          x = "Predicted Probabilities",
+          y = "True Probailities",
+          title = paste0("Simulation results of ", c)
+        ) +
+    xlim(0,1) + ylim(0,1)
+  
+  plot(scatter_plot)
+}
+```
+
+
+
+# Linden 2015
 ```{r}
 dataname <- "Linden_2015"
-n_rep <- 200
+
+sim_results <- readRDS(paste0("sim_results/simulation_results_ovo_", dataname,"_", n_rep, ".rds"))
+```
 
 
-sim_results <- readRDS(paste0("sim_results/simulation_results_", dataname,"_", n_rep, "_new.rds"))
-#classifiers <- names(sim_results)
-#classifiers <- classifiers[!(classifiers %in% c("outcome"))]
+```{r}
+bs_mat <- matrix(NA, nrow = n_rep, ncol = length(classifiers), dimnames = list(NULL, classifiers))
+ll_mat <- matrix(NA, nrow = n_rep, ncol = length(classifiers), dimnames = list(NULL, classifiers))
+e_mat <- matrix(NA, nrow = n_rep, ncol = length(classifiers), dimnames = list(NULL, classifiers))
 
-bs_mat <- matrix(NA, nrow=n_rep, ncol = length(classifiers))
-colnames(bs_mat) <- classifiers
-ll_mat <- matrix(NA, nrow=n_rep, ncol = length(classifiers))
-colnames(ll_mat) <- classifiers
+bs_mat_true_e <- matrix(NA, nrow=n_rep, ncol = 1)
+
 n=length(sim_results$outcome[[1]]$W)
-for (c in seq_along(classifiers)) {
-  classifier <- classifiers[c]
-  for (i in 1:n_rep){
-    bs <- brier_score(sim_results[[c]][[i]], sim_results[["outcome"]][[i]]$W, binary = FALSE)
-    bs_mat[i, c] <- bs
+for (i in 1:n_rep){
+  bs_mat_true_e[i] <- brier_score(probabilities=sim_results[["true_e"]][[i]], 
+                      outcome=sim_results[["outcome"]][[i]]$W, 
+                      binary = FALSE)
+
+  for (c in seq_along(classifiers)) {
+    classifier <- classifiers[c]
+
+    bs_mat[i, c] <- brier_score(probabilities=sim_results[[classifier]][[i]], 
+                      outcome=sim_results[["outcome"]][[i]]$W, 
+                      binary = FALSE)
     
-    ll <- cross_entropy(sim_results[[c]][[i]], sim_results[["outcome"]][[i]]$W)
-    ll_mat[i, c] <- ll
+    e_mat[i, c] <- mean(rowMeans((sim_results[[classifier]][[i]] - sim_results[["true_e"]][[i]])^2, na.rm = TRUE), na.rm = TRUE)
+
+    ll_mat[i, c] <- cross_entropy(sim_results[[classifier]][[i]], sim_results[["outcome"]][[i]]$W)
   }
 }
 ```
 
 
 ```{r}
-kable(cbind(round(colMeans(bs_mat),4), round(colMeans(ll_mat),4)), col.names = c("Classifier", "BS", "LL"), caption = "Mean")
-kable(cbind(colMedians(bs_mat), colMedians(ll_mat)), col.names = c("Classifier", "BS", "LL"), caption = "Median")
+kable(cbind(round(colMeans(e_mat),6), round(colMeans(bs_mat),4), round(colMeans(ll_mat),4)), col.names = c("Classifier", "BS", "LL"), caption = "Mean")
+#kable(cbind(colMedians(bs_mat), colMedians(ll_mat)), col.names = c("Classifier", "BS", "LL"), caption = "Median")
+
 ```
 
-
+## Visualization
 ```{r}
 bs_long <- bs_mat %>%
   as.data.frame() %>%
-  select(-c("kNN")) %>% 
-  pivot_longer(cols = everything()) 
+  #select(-c("kNN")) %>% 
+  pivot_longer(cols = everything())  %>%
+  # Separate the 'name' into 'classifier' and 'version' columns
+  mutate(version = case_when(
+           str_detect(name, "^ovr_") ~ "one-vs-rest",
+           str_detect(name, "^ovo_") ~ "one-vs-one",
+           TRUE ~ "multi-class"
+         ),
+         name = gsub("ovr_|ovo_", "", name)
+         ) 
   
 K <- length(unique(sim_results$outcome[[1]]$W))
-BS_random <- (((1/K)-1)^2 + (K-1)*((1/K)^2))/K
-
+BS_unif <- (((1/K)-1)^2 + (K-1)*((1/K)^2))/K
+LL_unif <- -(log(1/K) + log(1-(1/K)))
+BS_true <- mean(bs_mat_true_e)
   
-ggplot(bs_long, aes(x = value, y = name, fill = name)) +
-  geom_density_ridges(show.legend = FALSE) +
-  geom_vline(xintercept = BS_random, color="black", linetype = "dashed") +
-  scale_fill_paletteer_d("palettetown::spearow", direction = 1, dynamic = FALSE) +
-  labs(y="", x="Brier Score") +
-  theme_bw()
+plot2 <- ggplot(bs_long, aes(x = value, y = fct_rev(name), fill = version)) +
+  geom_density_ridges(alpha = 0.9, show.legend = FALSE) +
+  geom_vline(xintercept = BS_unif, color="black", linetype = "dashed") +
+  geom_vline(xintercept = BS_true, color="black", linetype = "dashed") +
+  scale_fill_paletteer_d("tayloRswift::midnightsBloodMoon", direction = 1, dynamic = FALSE) +
+  labs(y="", x="Brier Score", fill="") +
+  theme_bw() +
+  xlim(0.205, 0.25) +
+  scale_y_discrete(labels = rev(classifiers_clean)) +
+  facet_wrap(vars(version))
+plot2
+ggsave(plot2, width = 200, height = 100, units = "mm",
+       filename = "plots/dens2.png")
+
 ```
 
 
+
+
+```{r}
+pi <- sim_results$true_e[[1]]
+
+bs_true <- brier_score(probabilities = pi, outcome = sim_results[["outcome"]][[1]]$W)
+ll_true <- cross_entropy(probabilities = pi, outcome = sim_results[["outcome"]][[1]]$W)
+
+
+#for (c in classifiers){
+#  plot(make_calibtation_plot(probabilities = sim_results[[c]][[1]], outcome = sim_results$outcome[[1]]$W, method = c))
+#}
+
+for (c in classifiers){
+  predicted_e <- reshape2::melt(sim_results[[c]][[1]], id.vars = NULL, variable.name = "class", value.name = "prediction")
+true_e <- reshape2::melt(pi, id.vars = NULL, variable.name = "class", value.name = "true") %>% select(true)
+plot_data <- cbind(predicted_e, true_e)
+
+scatter_plot <- ggplot(data = plot_data,aes(y = prediction, x = true, color=class)) +
+  geom_point(alpha = 0.3) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") + 
+  geom_smooth(color="red", se = FALSE, linewidth = 0.7)+
+  theme_bw() +
+  scale_color_paletteer_d("tayloRswift::midnightsBloodMoon", direction = 1, dynamic = FALSE) +
+  labs(
+        x = "Predicted Probabilities",
+        y = "True Probailities",
+        title = paste0("Simulation results of ", c)
+      ) +
+  xlim(0,1) + ylim(0,1)
+
+plot(scatter_plot)
+}
+```
+
+
+
+# Acharky 2023
 
 ```{r}
 dataname <- "Acharky_2023"
-n_rep <- 200
+n_rep <- 100
 
-
-sim_results <- readRDS(paste0("sim_results/simulation_results_", dataname,"_", n_rep, "_new.rds"))
-#classifiers <- names(sim_results)
-#classifiers <- classifiers[!(classifiers %in% c("outcome"))]
+sim_results <- readRDS(paste0("sim_results/simulation_results_ovo_", dataname,"_", n_rep, ".rds"))
+#sim_results <- readRDS(paste0("sim_results/simulation_results_", dataname,"_", n_rep, "_new.rds"))
+classifiers <- names(sim_results)
+classifiers <- classifiers[!(classifiers %in% c("outcome"))]
 
 bs_mat <- matrix(NA, nrow=n_rep, ncol = length(classifiers))
 colnames(bs_mat) <- classifiers
@@ -148,10 +278,10 @@ n=length(sim_results$outcome[[1]]$W)
 for (c in seq_along(classifiers)) {
   classifier <- classifiers[c]
   for (i in 1:n_rep){
-    bs <- brier_score(sim_results[[c]][[i]], sim_results[["outcome"]][[i]]$W, binary = FALSE)
+    bs <- brier_score(sim_results[[classifier]][[i]], sim_results[["outcome"]][[i]]$W, binary = FALSE)
     bs_mat[i, c] <- bs
     
-    ll <- cross_entropy(sim_results[[c]][[i]], sim_results[["outcome"]][[i]]$W)
+    ll <- cross_entropy(sim_results[[classifier]][[i]], sim_results[["outcome"]][[i]]$W)
     ll_mat[i, c] <- ll
   }
 }
@@ -160,27 +290,53 @@ for (c in seq_along(classifiers)) {
 
 ```{r}
 kable(cbind(round(colMeans(bs_mat),4), round(colMeans(ll_mat),4)), col.names = c("Classifier", "BS", "LL"), caption = "Mean")
-kable(cbind(colMedians(bs_mat), colMedians(ll_mat)), col.names = c("Classifier", "BS", "LL"), caption = "Median")
+#kable(cbind(colMedians(bs_mat), colMedians(ll_mat)), col.names = c("Classifier", "BS", "LL"), caption = "Median")
 ```
 
 
 ```{r}
 bs_long <- bs_mat %>%
   as.data.frame() %>%
-  select(-c("kNN")) %>% 
-  pivot_longer(cols = everything()) 
+  pivot_longer(cols = everything())  %>%
+  # Separate the 'name' into 'classifier' and 'version' columns
+  mutate(version = case_when(
+           str_detect(name, "^ovr_") ~ "one-vs-rest",
+           str_detect(name, "^ovo_") ~ "one-vs-one",
+           TRUE ~ "multi-class"
+         ),
+         name = gsub("ovr_|ovo_", "", name)
+         ) %>% 
+  filter(name!="knn")
+
 
 K <- length(unique(sim_results$outcome[[1]]$W))
-BS_random <- (((1/K)-1)^2 + (K-1)*((1/K)^2))/K
+BS_unif <- (((1/K)-1)^2 + (K-1)*((1/K)^2))/K
 
   
-ggplot(bs_long, aes(x = value, y = name, fill = name)) +
-  geom_density_ridges(show.legend = FALSE) +
-  geom_vline(xintercept = BS_random, color="black", linetype = "dashed") +
-  scale_fill_paletteer_d("palettetown::parasect", direction = 1, dynamic = FALSE) +
-  labs(y="", x="Brier Score") +
+plot3 <- ggplot(bs_long, aes(x = value, y = name, fill = version)) +
+  geom_density_ridges(alpha = 0.5) +
+  geom_vline(xintercept = BS_unif, color="black", linetype = "dashed") +
+  scale_fill_paletteer_d("palettetown::delcatty", direction = 1, dynamic = FALSE) +
+  labs(y="", x="Brier Score", fill="") +
   theme_bw()
+plot3
+ggsave(plot3, width = 200, height = 100, units = "mm",
+       filename = "plots/dens3.png")
+```
+
+
+
+```{r}
+for (c in classifiers){
+  plot(make_calibtation_plot(probabilities = sim_results[[c]][[1]], outcome = sim_results$outcome[[1]]$W, method = c))
+}
 
 ```
 
+
+
+
+```{r}
+
+```
 
