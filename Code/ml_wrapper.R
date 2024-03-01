@@ -441,7 +441,7 @@ predict.nb_bernulli_fit = function(nb_bernulli_fit,x,y,xnew=NULL,weights=FALSE){
 #'
 
 # seems not to work with the do.call() function
-xgboost_fit = function(x,y,args=list(nrounds=40)){
+xgboost_fit = function(x,y,args=list(nrounds=40, eta=0.01)){
   K = length(unique(y))
   if (K==2){
      model = do.call(xgboost, c(list(data=x,label=y, verbose=0,
@@ -1135,58 +1135,57 @@ ovo_fit <- function(x, y, method = "logit") {
 }
 
 
-#predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, classifier = "logit") {
-#  if (is.null(xnew)) xnew = x
-#  if (weights==TRUE) {
-#    warning("Weights are not supported for propensity score estimation.")
-#  }
-#  
-#  n_classifiers <- length(ovo_fit)
-#  n_samples <- nrow(xnew)
-#  n_classes <- length(unique(unlist(strsplit(names(ovo_fit), "_"))))
-#  
-#  # Initialize an empty matrix to store the probabilities
-#  fit <- matrix(0, nrow = n_samples, ncol = n_classes) %>% as_tibble()
-#  colnames(fit) <- unique(unlist(strsplit(names(ovo_fit), "_")))
-#  
-#  for (i in 1:n_classifiers) {
-#    # Extract class names from the binary classifier name
-#    class_names <- unlist(strsplit(names(ovo_fit)[[i]], "_"))
-#    class_i <- class_names[1]
-#    class_j <- class_names[2]
-#    subset_y <- y[y %in% c(class_i, class_j)]
-#    #print(paste0("classifier ", i))
-# 
-#    # Predict probabilities using the i-th binary classifier
-#    fit_raw <- do.call(paste0("predict.", classifier,  "_fit"), 
-#                       list(ovo_fit[[i]], x=x, y=subset_y, xnew = xnew))
-#
-#
-#    # Compute probabilities for second class if not provided by default
-#    # @Maren: check how to add correct colnames
-#    fit_raw = fit_raw %>% as_tibble()
-#    if (ncol(fit_raw==1)){
-#      fit_raw[,2] <- 1 - fit_raw[,1]
-#    }
-#    if (!(all(class_names %in% colnames(fit_raw)))) {
-#      colnames(fit_raw) <- class_names
-#    }
-#    
-#    
-#    # Update the corresponding columns in e_hat
-#    fit[, `class_i`] <- fit[, `class_i`] + fit_raw[, `class_i`]
-#    fit[, `class_j`] <- fit[, `class_j`] + fit_raw[, `class_j`]
-#  }
-#  
-#  # Normalize the probabilities to sum up to 1 for each sample
-#  ##@Maren: research
-#  fit <- fit / rowSums(fit)
-#  
-#  
-#  #list("prediction"=fit,  "weights"="No weighted representation available.")
-#  fit
-#}
+# Register parallel backend
+# Adjust the number of cores as per your system configuration
 
+ovo_fit_parallel <- function(x, y, method = "logit") {
+  
+  #cl <- makeCluster(4)
+  #registerDoParallel(cl)
+  #clusterExport(cl, c(paste0(method, "_fit"), "glmnet", "nnet", "ranger", 
+  #                    "probability_forest", "multinom", "train.kknn",
+  #                    "gaussian_naive_bayes", "bernoulli_naive_bayes",
+  #                    "adaboost", "bagging", "svm", "lda", "qda", "xgboost",
+  #                    "class.ind", "naive_bayes"
+  #                    ))
+  
+  
+  
+  if (min(y) == 0) y <- y + 1
+  
+  class_labels <- sort(unique(y))
+  num_classes <- length(class_labels)
+  ovo_classifiers <- list()
+  
+  # Create binary classifiers for each pair of classes in parallel
+  ovo_classifiers <- foreach(i = 1:(num_classes - 1), .combine = "c") %dopar% {
+    classifiers <- list()
+    for (j in (i + 1):num_classes) {
+      class_i <- class_labels[i]
+      class_j <- class_labels[j]
+      
+      subset_x <- x[y %in% c(class_i, class_j), ]
+      subset_y <- y[y %in% c(class_i, class_j)]
+      
+      if (method == "xgboost") {
+        subset_y <- ifelse(subset_y == i, 1, 0)
+      }
+      
+      classifiers[[paste(class_i, class_j, sep = "_")]] <- do.call(
+        paste0(method, "_fit"),
+        list(y = subset_y,
+             x = subset_x)
+      )
+    }
+    classifiers
+  }
+  
+  #stopCluster(cl) # Stop the parallel backend
+  
+  return(ovo_classifiers)
+}
+
+# Now you can use ovo_fit_parallel instead of ovo_fit
 
 predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, method = "logit") {
   if (is.null(xnew)) xnew = x
@@ -1199,6 +1198,72 @@ predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, method = "logi
   n_classes <- length(unique(unlist(strsplit(names(ovo_fit), "_"))))
   
   if (min(y)==0) y = y+1
+  
+  # Create an empty q_matrix tensor
+  q_matrix_tensor <- array(NA, dim = c(n_samples, n_classes, n_classes))
+  
+  # Populate q_matrix_tensor using vectorized operations
+  for (i in 1:n_classifiers) {
+    class_names <- unlist(strsplit(names(ovo_fit)[[i]], "_"))
+    class_i <- class_names[1]
+    class_j <- class_names[2]
+    
+    subset_y <- y[y %in% c(class_i, class_j)]
+
+    # Predict probabilities using the i-th binary classifier
+    fit_raw <- do.call(paste0("predict.", method,  "_fit"), 
+                       list(ovo_fit[[i]], x=x, y=subset_y, xnew = xnew))
+    
+    if(is.list(fit_raw)) if(!is.data.frame(fit_raw)) fit_raw = fit_raw$prediction
+    # Compute probabilities for second class if not provided by default
+    fit_raw = fit_raw %>% as_tibble()
+    if (ncol(fit_raw==1)){
+      fit_raw[,2] <- 1 - fit_raw[,1]
+    }
+    if (!(all(class_names %in% colnames(fit_raw)))) {
+      colnames(fit_raw) <- class_names
+    }
+    
+    q_matrix_tensor[, as.numeric(class_i),as.numeric(class_j)] <- fit_raw[, `class_i`][[1]] 
+    q_matrix_tensor[, as.numeric(class_j),as.numeric(class_i)] <- fit_raw[, `class_j`][[1]] 
+  }
+  
+  # Perform optimization for all samples simultaneously
+  system.time({
+    opt_results <- apply(q_matrix_tensor, MARGIN = 1, function(q_matrix_row) {
+      opt_result <- optim(rep(1/n_classes, n_classes), 
+                          kl_convergence, 
+                          q_matrix = matrix(q_matrix_row, nrow = n_classes),
+                          method = "L-BFGS-B", 
+                          lower = rep(0, n_classes), upper = rep(1, n_classes))
+      
+      # Normalize p to sum to 1
+      p_optimized <- opt_result$par / sum(opt_result$par)
+      return(p_optimized)
+    })
+  })
+  
+  
+  
+  # Assign the results to the fit matrix
+  fit <- t(simplify2array(opt_results))
+  colnames(fit) <- unique(unlist(strsplit(names(ovo_fit), "_")))
+  #list("prediction"=fit,  "weights"="No weighted representation available.")
+  return(fit)
+}
+
+
+predict.ovo_fit_parallel <- function(ovo_fit, x, y, xnew = NULL, weights = FALSE, method = "logit") {
+  if (is.null(xnew)) xnew <- x
+  if (weights) {
+    warning("Weights are not supported for propensity score estimation.")
+  }
+  
+  n_classifiers <- length(ovo_fit)
+  n_samples <- nrow(xnew)
+  n_classes <- length(unique(unlist(strsplit(names(ovo_fit), "_"))))
+  
+  if (min(y) == 0) y <- y + 1
   
   # Create an empty q_matrix tensor
   q_matrix_tensor <- array(NA, dim = c(n_samples, n_classes, n_classes))
@@ -1232,26 +1297,26 @@ predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, method = "logi
   }
   
   # Perform optimization for all samples simultaneously
-  opt_results <- apply(q_matrix_tensor, MARGIN = 1, function(q_matrix_row) {
-    opt_result <- optim(rep(1/n_classes, n_classes), 
-                        kl_convergence, 
-                        q_matrix = matrix(q_matrix_row, nrow = n_classes),
-                        method = "L-BFGS-B", 
-                        lower = rep(0, n_classes), upper = rep(1, n_classes))
-    
-    # Normalize p to sum to 1
-    p_optimized <- opt_result$par / sum(opt_result$par)
-    return(p_optimized)
+  system.time({
+    opt_results <- foreach(q_matrix_row = 1:n_samples, .combine = "c") %dopar% {
+      opt_result <- optim(rep(1/n_classes, n_classes), 
+                          kl_convergence, 
+                          q_matrix = q_matrix_tensor[q_matrix_row,,],
+                          method = "L-BFGS-B", 
+                          lower = rep(0, n_classes), upper = rep(1, n_classes))
+      
+      # Normalize p to sum to 1
+      p_optimized <- opt_result$par / sum(opt_result$par)
+      return(p_optimized)
+    }
   })
-  
+  fit <- matrix(opt_results, nrow = n_samples, ncol = n_classes, byrow = TRUE)
   
   # Assign the results to the fit matrix
-  fit <- t(simplify2array(opt_results))
   colnames(fit) <- unique(unlist(strsplit(names(ovo_fit), "_")))
-  #list("prediction"=fit,  "weights"="No weighted representation available.")
-  fit
+  
+  return(fit)
 }
-
 
 
 # One-vs-Rest Classifier
@@ -1297,7 +1362,6 @@ predict.ovr_fit <- function(ovr_fit,x,y, xnew=NULL,weights=FALSE, method = "logi
   
   for (i in 1:n_classifiers) {
     binarized_y <- ifelse(y == i, 1, 0)
-    #print(paste0("classifier ", i))
     # Predict probabilities using the i-th binary classifier
     # @Maren: change to ml_methods[[ml]]
     fit_raw <- do.call(paste0("predict.", method,  "_fit"), 
@@ -1326,23 +1390,3 @@ predict.ovr_fit <- function(ovr_fit,x,y, xnew=NULL,weights=FALSE, method = "logi
 
 
 
-
-
-
-
-
-
-#model_fit = function(x,y,args=list()){
-#  model = do.call( ... ,c(list(...), args))
-#  model
-#}
-#
-#predict.model_fit = function(model_fit, x,y,xnew=NULL,weights=FALSE){
-#  if (is.null(xnew)) xnew = x
-#  if (weights==TRUE) {
-#    warning("Weights are not supported for propensity score estimation.")
-#  }
-#  
-#  fit = predict(model_fit, )
-#  list("prediction"=fit,  "weights"="No weighted representation available.")
-#}

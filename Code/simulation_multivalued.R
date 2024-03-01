@@ -8,24 +8,24 @@ options(scipen= 999)
 
 
 # Set the number of simulations and number of cross folds
-n_rep <- 200
+n_rep <- 100
 n_folds <- 5
 
 # Set your list of classifiers
 classifiers <- c(#"ovo", "ovr",
   "knn", "lda", "logit", "logit_nnet",
   "mlpc", "nb_bernulli", "nb_gaussian", 
-  "probability_forest", "ranger", "qda", "xgboost"
+  "probability_forest", "ranger", "qda" #"xgboost"
 )
 
-
+#classifiers <- c("ranger")
 
 #dataname <- "Imbens_2016" ## 1 Sim 15 s
 #dataname <- "Linden_2015" ## 1 sim 10 s
 #dataname <- "Archarky_2023"
 
-#datanames <- c("Imbens_2016","Linden_2015", "Archarky_2023")
-datanames <- c("Archarky_2023")
+datanames <- c("Imbens_2016","Linden_2015", "Acharky_2023")
+#datanames <- c("Imbens_2016","Linden_2015")
 
 for (dataname in datanames){
   
@@ -99,7 +99,7 @@ for (dataname in datanames){
         
       }
       # Store the results
-      results[[c]][[i]] <- predictions
+      results[[classifier]][[i]] <- predictions
     }
    }
   
@@ -107,21 +107,8 @@ for (dataname in datanames){
   elapsed_time <- end_time - start_time
   cat(n_rep, "Simulations:", "elapsed time:", elapsed_time, "\n")
   
-  # Now, all_results is a list of lists, with each inner list containing predictions for each simulation of a specific classifier
-  
-  # If you want to do something with the results, you can loop through the list
-  # For example, printing the mean of predictions from each simulation for each classifier
-  #for (c in seq_along(classifiers)) {
-  #  for (i in 1:n_rep) {
-  #    cat("Classifier:", classifiers[c], "- Simulation", i, "- Mean Prediction:", mean(all_results[[c]][[i]][[1]]), "\n")
-  #  }
-  #}
-  #
-  #all_results[[1]][[1]][[1]]
-  
-  # If you want to save the results to a file, you can use saveRDS or any other suitable method
-  # For example, saving the results as an RDS file
-  saveRDS(results, file = paste0("sim_results/simulation_results_", dataname,"_", n_rep, "_new.rds"))
+  # save the results as an RDS file
+  saveRDS(results, file = paste0("sim_results/simulation_results_", dataname,"_", n_rep, ".rds"))
 
 }
 
