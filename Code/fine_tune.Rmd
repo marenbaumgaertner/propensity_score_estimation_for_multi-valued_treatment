@@ -32,6 +32,7 @@ classifiers <- c(
 )
 
 classifiers_to_tune <- classifiers[!(classifiers %in% c("lda", "qda"))]
+classifiers_to_tune <- c("ranger")
 ```
 
 ## Create multi-valued train data
@@ -428,7 +429,7 @@ for (dataname in datanames){
     
     best_xgboost <- finetuning_soft_classifier(x=X, y=W, method=xgboost_method)
     iter_results$xgboost_method <- best_xgboost
-    
+  
     # Append results of current iteration to main results list
     results[[iter]] <- iter_results
   }
