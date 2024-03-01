@@ -1,29 +1,7 @@
 
 
 brier_score <- function(probabilities, outcome, binary = TRUE){
-  # reshape probabilities
-  #if(binary==TRUE){
-  #  if(!is.matrix(probabilities)){
-  #    probabilities <- as.matrix(probabilities)
-  #  }
-  #  if(dim(probabilities)[2]>1){
-  #    probabilities <- as_tibble(probabilities)
-  #    if("1" %in% colnames(probabilities)){
-  #      probabilities <- as.matrix(probabilities$`1`)
-  #    }else if("V2" %in% colnames(probabilities)){
-  #      probabilities <- as.matrix(probabilities$`V2`)
-  #    }else{
-  #      # @Maren: some prediction have V1 and V2 as colnames, add this to code.
-  #      # @Maren: too much characer for 1 line, check out how you can do elegant line breaks
-  #      paste("Probabilities argument does not indicates which column contains the probabilities for class 1. Rename column of just use corresponding column as input.")
-  #      break
-  #    }
-  #  }
-  #  
-  #}#else{
-  
-  #}
-  
+
   # reshape outcome for multi-valued treatment from 1xN to KxN
   if(length(unique(outcome))==2){
     outcome <- as.matrix(outcome)
@@ -31,10 +9,10 @@ brier_score <- function(probabilities, outcome, binary = TRUE){
     outcome <- class.ind(as.matrix(outcome))
   }
   
-  # @Maren: wie kann ich R sagen dass es okay ist wenn beide dimension identisch sind? -> unique :P
   if(unique(dim(probabilities) == dim(outcome))){
     bs <- mean(rowMeans((probabilities - outcome)^2, na.rm = TRUE), na.rm = TRUE)
   }
+
   return(bs)
   
 }
@@ -48,7 +26,7 @@ cross_entropy <- function(probabilities, outcome) {
     probs <- probabilities[cbind(1:n, outcome)] 
     
     # compute logarithm loss and divide by number of observations
-    ll = -sum(log(probs))/length(outcome)
+    ll = -sum(log(probs+1e-20))/length(outcome)
   }else{
     stop("Error: Probabilities matrix does not match outcome classes.")
   }
@@ -58,9 +36,11 @@ cross_entropy <- function(probabilities, outcome) {
 }
 
 
-make_calibtation_plot <- function(probabilities, outcome, method) {
+make_calibtation_plot <- function(probabilities, outcome, method, n_bins = 10) {
   
   class_names = colnames(probabilities)
+  
+  if (length(unique(outcome))>2) if (min(outcome)==0) outcome = outcome+1
   
   if (length(unique(outcome))==2){
     calibration_data <- cbind(probabilities, outcome)
@@ -71,7 +51,7 @@ make_calibtation_plot <- function(probabilities, outcome, method) {
       pivot_longer(cols = class_names, 
                    names_to = "group",
                    values_to = "predicted_probabilities")
-    true_outcome <- class.ind(W_test) %>% 
+    true_outcome <- class.ind(outcome) %>% 
       as_tibble() %>% 
       pivot_longer(cols = class_names, 
                    names_to = "group",
@@ -81,9 +61,9 @@ make_calibtation_plot <- function(probabilities, outcome, method) {
   }
   
   # Create probability bins (e.g., 10 bins)
-  n_bins <- 10
   bin_width <- 1 / n_bins
   bin_centers <- seq(0, 1, by = bin_width) + bin_width / 2
+  bin_centers <- bin_centers[1:length(bin_centers)-1]
   
   # Group data into bins
   calibration_data$probability_bin <- cut(
@@ -101,7 +81,7 @@ make_calibtation_plot <- function(probabilities, outcome, method) {
     )
   
   # Create a calibration plot
-  if (length(unique(W_test))==2){
+  if (length(unique(outcome))==2){
     plot <- ggplot(calibration_summary, aes(x = mean_predicted_prob, y = mean_actual_outcome)) +
       geom_point() +
       geom_line() +
@@ -113,10 +93,13 @@ make_calibtation_plot <- function(probabilities, outcome, method) {
       ) +
       scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
       scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
+      scale_color_paletteer_d("palettetown::delcatty", direction = 1, dynamic = FALSE) +
       theme_bw()
     
   }else{
-    custom_palette <- c("#8E063B", "#79D359", "#4B0055", "#F7A72B", "#FFBEC1")
+    custom_palette <- c("#D23736", "#79D359", "#4B0055", "#F7A72B", "#FFBEC1", 
+                        "#8E063B", "#374f3f", "#631b1f", "#c45400", "#842c5c",
+                        "#910e08", "#1f3611", "#6c2132")
     plot <- ggplot(calibration_summary, aes(x = mean_predicted_prob, y = mean_actual_outcome, 
                                             color=group)) +
       geom_point() +
@@ -125,9 +108,10 @@ make_calibtation_plot <- function(probabilities, outcome, method) {
       labs(
         x = "Mean Predicted Probability",
         y = "Mean Actual Outcome",
+        color = "Treatment",
         title = paste0("Calibration Plot of ", method)
       ) +
-      scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
+        scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
       scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
       scale_color_manual(values = custom_palette) +
       theme_bw()

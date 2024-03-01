@@ -101,7 +101,7 @@ probability_forest_ranger <- list(
   )
 )
 
-probability_forest_ranger$grid <- subset(grid, !(splitrule == "extratrees" & sample.fraction != 1))
+probability_forest_ranger$grid <- subset(probability_forest_ranger$grid, !(splitrule == "extratrees" & sample.fraction != 1))
 
 # MLPC
 mlpc <- list(
