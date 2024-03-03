@@ -33,7 +33,7 @@ for (i in 1:n_rep){
   sim_results[['true_e']][[i]] <- pi
 }
 
-saveRDS(sim_results, paste0("sim_results/simulation_results_ovo_", dataname,"_", n_rep, ".rds"))
+saveRDS(sim_results, paste0("sim_results/simulation_results_final_", dataname,"_", n_rep, ".rds"))
 
 
 # Second dataset
@@ -63,4 +63,4 @@ for (i in 1:n_rep){
   sim_results[['true_e']][[i]] <- pi
 }
 
-saveRDS(sim_results, paste0("sim_results/simulation_results_ovo_", dataname,"_", n_rep, ".rds"))
+saveRDS(sim_results, paste0("sim_results/simulation_results_final_", dataname,"_", n_rep, ".rds"))
