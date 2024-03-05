@@ -122,7 +122,7 @@ make_calibtation_plot <- function(probabilities, outcome, method, n_bins = 10) {
 }
 
 kl_convergence <- function(p, q_matrix) {
-  epsilon <- 1e-10
+  epsilon <- 1e-7
   p <- p / sum(p) # Normalize p to sum to 1
   K <- length(p)
   total_divergence <- 0
@@ -189,13 +189,13 @@ finetuning_soft_classifier <- function(x, y, method, n_folds=5){
     # cross validation
     for (f in 1:n_folds){
       # fit model 
-      model <- do.call(method$fit, list(x = X[fold != f,], y = W[fold != f], params))
+      model <- do.call(method$fit, list(x = x[fold != f,], y = y[fold != f], params))
       #print(paste0("Model param lambda = ", model$lambda))
       #print(paste0("Grid param lambda = ", params$lambda))
       
       # predict
       predictions[fold == f,] <- do.call(method$predict,
-                                         list(model, X[fold != f,], W[fold != f], xnew = X[fold == f,]))
+                                         list(model, x = x[fold != f,], y = y[fold != f], xnew = x[fold == f,]))
       
     }
       

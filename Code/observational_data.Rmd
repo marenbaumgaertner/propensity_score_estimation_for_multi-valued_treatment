@@ -1,0 +1,422 @@
+---
+title: "Real Data Experiments"
+author: "Maren Baumgärtner"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+    code_folding: show
+---
+
+```{r, message=FALSE, echo=FALSE,warning=FALSE}
+source("packages.R")
+source("ml_wrapper.R")
+source("eval_functions.R")
+
+set.seed(42)
+options(scipen= 999)
+```
+
+# Students Dropout
+
+```{r, message=FALSE}
+dataname <- "students_dropout"
+dataset <- read_delim("data/predict+students+dropout+and+academic+success.zip", 
+                                                            delim = ";", escape_double = FALSE, trim_ws = TRUE)
+```
+
+Define outcome variable and confounders
+```{r}
+X <- dataset %>% 
+  select(-Target) 
+
+# Clean column names
+clean_colnames <- make.names(colnames(X))
+colnames(X) <- clean_colnames
+
+W <- as.numeric(factor(dataset$Target))
+kable(table(dataset$Target), col.names = c("Target", "Frequency"))
+```
+
+Split dataset into training and test data
+
+```{r}
+split_indices <- sample.split(dataset$Target, SplitRatio = 0.8)
+training_data <- dataset[split_indices, ]
+test_data <- dataset[!split_indices, ]
+
+W_training <- W[split_indices]
+W_test <- W[!split_indices]
+
+X_training <- as.matrix(data.frame(X[split_indices, ]))
+X_test <- as.matrix(data.frame(X[!split_indices, ]))
+
+kable(head(X_training))
+```
+
+Fine tuning of classifier
+
+```{r, message=FALSE}
+source("ml_methods.R")
+
+classifiers <- list(logit = multinomial_logit, 
+                    logit_nnet = multinomial_logit_nnet, 
+                    knn = knn, 
+                    nb_bernulli = nb_bernulli, 
+                    probability_forest = probability_forest_grf, 
+                    ranger = probability_forest_ranger, 
+                    mlpc = mlpc)
+
+tuning_results <- list()
+
+for (c in names(classifiers)){
+  best_fit <- finetuning_soft_classifier(x = X_training, y = W_training, method = classifiers[[c]])
+  tuning_results[[c]] <- best_fit
+}
+
+# save tuning results
+saveRDS(tuning_results, file = paste0("sim_results/tuning_results_", dataname, ".rds"))
+```
+
+Fit models
+
+```{r}
+classifiers <- c(
+  "adaboost",  "bagging", "knn",
+  "lda", "logit", "logit_nnet",
+  "mlpc", "nb_bernulli", "nb_gaussian",
+  "probability_forest", "qda", "ranger", "svm", "xgboost"
+)
+classifiers_mc <- c(
+  "knn", "lda", "logit", "logit_nnet",
+  "mlpc", "nb_bernulli", "nb_gaussian", 
+  "probability_forest", "ranger", "qda" 
+)
+
+tuning_results <- readRDS(paste0("sim_results/tuning_results_", dataname, ".rds"))
+tuned_classifiers <- names(tuning_results)
+  
+n = nrow(X_training)
+t = length(unique(W_training))
+
+results <- list()
+
+
+for (c in seq_along(classifiers)) {
+  classifier <- classifiers[c]
+  print(classifier)
+  
+  # Multi-class model
+  if (classifier %in% classifiers_mc){
+    if (classifier %in% tuned_classifiers){
+      params_raw <- tuning_results[[classifier]]$best_params
+      params_raw$BS <- NULL
+      rownames(params_raw) <- NULL
+      params <- list()
+      # Store tuning parameters
+      for (col_name in colnames(params_raw)) {
+        if (is.factor(params_raw[[col_name]])) {
+          params[[col_name]] <- as.character(params_raw[[col_name]][1])
+        } else {
+          params[[col_name]] <- params_raw[[col_name]][1]
+        }
+      }
+    }else{
+      params = list()
+    }
+    
+    colnames(predictions) <- seq(1,t,1)
+    
+    # fit model 
+    model <- do.call(paste0(classifier, "_fit"), list(x = X_training, y = W_training, params))
+    
+    # predict
+    predictions <- do.call(paste0("predict.", classifier, "_fit"),
+                                       list(model, X_training, W_training, xnew = X_test))
+    
+    results[[classifier]] <- as.data.frame(predictions) # Store the results
+  }
+
+  # fit OvR model
+  model <- do.call(ovr_fit,
+                   list(x = X_training, y = W_training,
+                   method = classifier))
+  # predict
+  predictions <- do.call(predict.ovr_fit, 
+                   list(model, x = X_training, y = W_training, xnew = X_test,
+                        method = classifier))
+  
+  predictions <- predictions[, order(names(predictions))]
+  results[[paste0("ovr_", classifier)]] <- predictions # Store the results
+ 
+  
+  # fit OvO model
+  model <- do.call(ovo_fit,
+                   list(x = X_training, y = W_training,
+                   method = classifier))
+  # predict
+  predictions <- do.call(predict.ovo_fit, 
+                   list(model, x = X_training, y = W_training, xnew = X_test,
+                        method = classifier))
+  #predictions <- predictions[, order(names(predictions))]
+  results[[paste0("ovo_", classifier)]] <- as.data.frame(predictions) # Store the results
+ 
+}
+  
+saveRDS(results, file = paste0("sim_results/results_", dataname, ".rds"))
+```
+
+Evaluation of results
+
+```{r}
+results <- readRDS(file = paste0("sim_results/results_", dataname, ".rds"))
+
+bs_mat <- matrix(nrow = length(names(results)), ncol = 2)
+colnames(bs_mat) <- c("name", "value")
+
+for (i in seq_along(names(results))) {
+  bs_mat[i, "name"] <- names(results)[i]
+  bs_mat[i, "value"] <- brier_score(probabilities = results[[i]], outcome = W_test, binary = FALSE)
+}
+
+bs_long <- bs_mat %>%
+  as.data.frame() %>%
+  #pivot_longer(cols = everything())  %>%
+  # Separate the 'name' into 'classifier' and 'version' columns
+  mutate(version = case_when(
+           str_detect(name, "^ovr_") ~ "one-vs-rest",
+           str_detect(name, "^ovo_") ~ "one-vs-one",
+           TRUE ~ "multi-class"
+         ),
+         name = gsub("ovr_|ovo_", "", name),
+         value = as.numeric(value)
+         )
+
+bs_wide <- bs_long %>%
+  group_by(version, name) %>% 
+  summarise(value = round(mean(value), 4)) %>% 
+  spread(key = version, value = value) 
+
+write.xlsx(bs_wide, file = paste0("sim_results/results_bs_", dataname, ".xlsx"))
+
+kable(bs_wide, caption = "Brier Score")
+
+```
+
+```{r}
+results <- readRDS(file = paste0("sim_results/results_", dataname, ".rds"))
+for (c in names(results)){
+  plot(make_calibtation_plot(probabilities = results[[c]], outcome = W_test, method = c))
+}
+```
+
+
+# Customer Segmentation
+
+```{r, message=FALSE}
+dataname <- "customer_segmentation"
+dataset <- read_csv("data/customer_segmentation/Train.csv") %>% drop_na()
+```
+
+Define outcome variable and confounders
+```{r}
+X <- dataset %>% 
+  select(-c(ID,Segmentation)) 
+
+
+library(fastDummies)
+
+# Use the dummy_cols() function to one-hot encode character columns
+X <- dummy_cols(X, select_columns = names(X[sapply(X, is.character)]))
+
+# Optionally, remove the original character columns
+X <- X[, !names(X) %in% names(X[sapply(X, is.character)])]
+
+# Clean column names
+clean_colnames <- make.names(colnames(X))
+colnames(X) <- clean_colnames
+
+W <- as.numeric(factor(dataset$Segmentation))
+kable(table(dataset$Segmentation), col.names = c("Target", "Frequency"))
+
+```
+
+Split dataset into training and test data
+
+```{r}
+split_indices <- sample.split(dataset$Segmentation, SplitRatio = 0.8)
+training_data <- dataset[split_indices, ]
+test_data <- dataset[!split_indices, ]
+
+W_training <- W[split_indices]
+W_test <- W[!split_indices]
+
+X_training <- as.matrix(data.frame(X[split_indices, ]))
+X_test <- as.matrix(data.frame(X[!split_indices, ]))
+
+kable(head(X_training))
+```
+
+Fine tuning of classifier
+
+```{r, message=FALSE}
+source("ml_methods.R")
+classifiers <- list(logit = multinomial_logit, 
+                    logit_nnet = multinomial_logit_nnet, 
+                    knn = knn, 
+                    nb_bernulli = nb_bernulli, 
+                    probability_forest = probability_forest_grf, 
+                    ranger = probability_forest_ranger, 
+                    mlpc = mlpc)
+
+tuning_results <- list()
+
+for (c in names(classifiers)){
+  best_fit <- finetuning_soft_classifier(x = X_training, y = W_training, method = classifiers[[c]])
+  tuning_results[[c]] <- best_fit
+}
+
+# save tuning results
+saveRDS(tuning_results, file = paste0("sim_results/tuning_results_", dataname, ".rds"))
+```
+
+Fit models
+
+```{r, message=FALSE}
+classifiers <- c(
+ "adaboost",  "bagging", "knn",
+  "lda", 
+  "logit", "logit_nnet",
+  "mlpc", "nb_bernulli", "nb_gaussian",
+  "probability_forest", #"qda", 
+  "ranger", "svm", "xgboost"
+)
+classifiers_mc <- c(
+  "knn", "lda", "logit", "logit_nnet",
+  "mlpc", "nb_bernulli", "nb_gaussian", 
+  "probability_forest", "ranger", "qda" 
+)
+
+tuning_results <- readRDS(paste0("sim_results/tuning_results_", dataname, ".rds"))
+tuned_classifiers <- names(tuning_results)
+  
+n = nrow(X_training)
+t = length(unique(W_training))
+
+results <- list()
+
+
+for (c in seq_along(classifiers)) {
+  classifier <- classifiers[c]
+  print(classifier)
+  
+  # Multi-class model
+  if (classifier %in% classifiers_mc){
+    if (classifier %in% tuned_classifiers){
+      params_raw <- tuning_results[[classifier]]$best_params
+      params_raw$BS <- NULL
+      rownames(params_raw) <- NULL
+      params <- list()
+      # Store tuning parameters
+      for (col_name in colnames(params_raw)) {
+        if (is.factor(params_raw[[col_name]])) {
+          params[[col_name]] <- as.character(params_raw[[col_name]][1])
+        } else {
+          params[[col_name]] <- params_raw[[col_name]][1]
+        }
+      }
+    }else{
+      params = list()
+    }
+    
+    colnames(predictions) <- seq(1,t,1)
+    
+    # fit model 
+    model <- do.call(paste0(classifier, "_fit"), list(x = X_training, y = W_training, params))
+    
+    # predict
+    predictions <- do.call(paste0("predict.", classifier, "_fit"),
+                                       list(model, X_training, W_training, xnew = X_test))
+    
+    results[[classifier]] <- as.data.frame(predictions) # Store the results
+  }
+
+  # fit OvR model
+  model <- do.call(ovr_fit,
+                   list(x = X_training, y = W_training,
+                   method = classifier))
+  # predict
+  predictions <- do.call(predict.ovr_fit, 
+                   list(model, x = X_training, y = W_training, xnew = X_test,
+                        method = classifier))
+  
+  predictions <- predictions[, order(names(predictions))]
+  results[[paste0("ovr_", classifier)]] <- predictions # Store the results
+ 
+  
+  # fit OvO model
+  model <- do.call(ovo_fit,
+                   list(x = X_training, y = W_training,
+                   method = classifier))
+  # predict
+  predictions <- do.call(predict.ovo_fit, 
+                   list(model, x = X_training, y = W_training, xnew = X_test,
+                        method = classifier))
+  #predictions <- predictions[, order(names(predictions))]
+  results[[paste0("ovo_", classifier)]] <- as.data.frame(predictions) # Store the results
+ 
+}
+  
+saveRDS(results, file = paste0("sim_results/results_", dataname, ".rds"))
+
+
+```
+
+Evaluation of results
+
+```{r}
+bs_mat <- matrix(nrow = length(names(results)), ncol = 2)
+colnames(bs_mat) <- c("name", "value")
+
+for (i in seq_along(names(results))) {
+  bs_mat[i, "name"] <- names(results)[i]
+  bs_mat[i, "value"] <- brier_score(probabilities = results[[i]], outcome = W_test, binary = FALSE)
+}
+
+bs_long <- bs_mat %>%
+  as.data.frame() %>%
+  #pivot_longer(cols = everything())  %>%
+  # Separate the 'name' into 'classifier' and 'version' columns
+  mutate(version = case_when(
+           str_detect(name, "^ovr_") ~ "one-vs-rest",
+           str_detect(name, "^ovo_") ~ "one-vs-one",
+           TRUE ~ "multi-class"
+         ),
+         name = gsub("ovr_|ovo_", "", name),
+         value = as.numeric(value)
+         )
+
+bs_wide <- bs_long %>%
+  group_by(version, name) %>% 
+  summarise(value = round(mean(value), 6)) %>% 
+  spread(key = version, value = value) 
+
+write.xlsx(bs_wide, file = paste0("sim_results/results_bs_", dataname, ".xlsx"))
+
+kable(bs_wide, caption = "Brier Score")
+
+```
+
+
+```{r, message=FALSE}
+results <- readRDS(file = paste0("sim_results/results_", dataname, ".rds"))
+for (c in names(results)){
+  plot(make_calibtation_plot(probabilities = results[[c]], outcome = W_test, method = c))
+}
+```
+
+
+```{r}
+
+```
+
