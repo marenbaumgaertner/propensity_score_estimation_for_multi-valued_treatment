@@ -28,14 +28,22 @@ dataset <- read_delim("data/predict+students+dropout+and+academic+success.zip",
 Define outcome variable and confounders
 ```{r}
 X <- dataset %>% 
-  select(-Target) 
+  select(-Target) %>% 
+  mutate(Course = as.factor(Course),
+         International = as.factor(International),
+         `Application mode` = as.factor(`Application mode`),
+         `Previous qualification` = as.factor(`Previous qualification`),
+         Nacionality = as.factor(Nacionality))
+
+X <- model.matrix(~ . - 1, data = X)
 
 # Clean column names
 clean_colnames <- make.names(colnames(X))
 colnames(X) <- clean_colnames
 
 W <- as.numeric(factor(dataset$Target))
-kable(table(dataset$Target), col.names = c("Target", "Frequency"))
+kable(table(dataset$Target)/length(W), col.names = c("Target", "Frequency"))
+kable(table(dataset$Target)/length(W), col.names = c("Target", "Frequency"))
 ```
 
 Split dataset into training and test data
@@ -54,9 +62,16 @@ X_test <- as.matrix(data.frame(X[!split_indices, ]))
 kable(head(X_training))
 ```
 
+
+```{r}
+pi <- table(W_training)/length(W_training)
+pi <- t(replicate(length(W_test), pi))
+BS_naive <- brier_score(pi, W_test)
+```
+
 Fine tuning of classifier
 
-```{r, message=FALSE}
+```{r, message=FALSE, eval=FALSE}
 source("ml_methods.R")
 
 classifiers <- list(logit = multinomial_logit, 
@@ -125,7 +140,6 @@ for (c in seq_along(classifiers)) {
       params = list()
     }
     
-    colnames(predictions) <- seq(1,t,1)
     
     # fit model 
     model <- do.call(paste0(classifier, "_fit"), list(x = X_training, y = W_training, params))
@@ -134,7 +148,7 @@ for (c in seq_along(classifiers)) {
     predictions <- do.call(paste0("predict.", classifier, "_fit"),
                                        list(model, X_training, W_training, xnew = X_test))
     
-    results[[classifier]] <- as.data.frame(predictions) # Store the results
+    #results[[classifier]] <- as.data.frame(predictions) # Store the results
   }
 
   # fit OvR model
@@ -206,7 +220,10 @@ kable(bs_wide, caption = "Brier Score")
 ```{r}
 results <- readRDS(file = paste0("sim_results/results_", dataname, ".rds"))
 for (c in names(results)){
-  plot(make_calibtation_plot(probabilities = results[[c]], outcome = W_test, method = c))
+  p <- make_calibtation_plot(probabilities = results[[c]], outcome = W_test, method = c)
+  plot(p)
+  ggsave(p, file = paste0("plots/",c, "_student.png"),
+         width = 120, height = 100, units = "mm")
 }
 ```
 
@@ -223,14 +240,7 @@ Define outcome variable and confounders
 X <- dataset %>% 
   select(-c(ID,Segmentation)) 
 
-
-library(fastDummies)
-
-# Use the dummy_cols() function to one-hot encode character columns
-X <- dummy_cols(X, select_columns = names(X[sapply(X, is.character)]))
-
-# Optionally, remove the original character columns
-X <- X[, !names(X) %in% names(X[sapply(X, is.character)])]
+X <- model.matrix(~ . - 1, data = X)
 
 # Clean column names
 clean_colnames <- make.names(colnames(X))
@@ -417,6 +427,8 @@ for (c in names(results)){
 
 
 ```{r}
+K <- 4 # number of treatments
+BS_naive <- (((1/K)-1)^2 + (K-1)*((1/K)^2))/K # BS_naive
 
 ```
 
