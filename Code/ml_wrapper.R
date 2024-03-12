@@ -343,7 +343,7 @@ predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE){
   if (length(logit_fit$glmnet.fit$classnames)==2){
     fit[,2] = 1 - fit[,1]
     colnames(fit) = rev(logit_fit$glmnet.fit$classnames)
-  }else{
+      }else{
     colnames(fit) = logit_fit$classnames
   }
   
@@ -519,7 +519,7 @@ predict.xgboost_fit = function(xgboost_fit,x,y,xnew=NULL,weights=FALSE){
 #'
 
 svm_fit = function(x,y,args=list(gamma = 0.1)){
-  model = do.call(svm, c(list(y = y, x = x, probability = TRUE, kernel = "sigmoid", 
+  model = do.call(svm, c(list(y = y, x = x, probability = TRUE, kernel = "radial", 
                               type = 'C-classification'), args))
   return(model)
 }
