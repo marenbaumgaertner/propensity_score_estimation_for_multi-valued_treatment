@@ -1,0 +1,489 @@
+---
+title: "Evaluation of Simulation results"
+author: "Maren Baumgärtner"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+    code_folding: show
+---
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+set.seed(42) # set seed
+options(scipen= 999) # prevent scientific notation
+source("functions/packages.R")
+source("functions/eval_functions.R")
+
+n_rep <- 100 # define number of iterations
+```
+
+This notebook evaluates the simulation results from the file *simulation_multivalued.R* and *simulation_binarised.R* for all three datasets. The computations are the same for each dataset.
+
+1.  Import the raw simulation results which contain the predicted propensity scores for each classifier
+2.  Compute the Brier score, the log loss and the RMSE for each iteration
+3.  Take the average
+4.  Reshape the results such that each classifier is in one row and each implementation is in one column.
+
+# Linden 2016
+
+### Import simulation results
+
+```{r}
+dataname <- "Linden_2015"
+
+# import simulation results
+sim_results <- readRDS(paste0("sim_results/simulation_results_final_", dataname,"_", n_rep, ".rds"))
+
+# define classifiers
+classifiers <- names(sim_results)
+classifiers <- classifiers[!(classifiers %in% c("outcome", "true_e"))]
+classifiers_clean <- c("adaBoost", "bagging" ,"kNN", "LDA", "Multinimial logit (glmnet)", "Multinimial logit (nnet)", "MLPC", "Naive Bayes (Bernoulli)", "Naive Bayes (Gaussian)", "Probability forest (grf)", "Probability forest (ranger)", "QDA", "SVM", "XGBoost")
+```
+
+### Compute average evaluation metrics
+
+The predicted propensity score are evaluated using the Brier score, the RMSE and the logistic loss.
+
+```{r}
+bs_mat <- matrix(NA, nrow = n_rep, ncol = length(classifiers), dimnames = list(NULL, classifiers))
+ll_mat <- matrix(NA, nrow = n_rep, ncol = length(classifiers), dimnames = list(NULL, classifiers))
+rmse_mat <- matrix(NA, nrow = n_rep, ncol = length(classifiers), dimnames = list(NULL, classifiers))
+
+bs_mat_oracle <- matrix(NA, nrow=n_rep, ncol = 1)
+
+n=length(sim_results$outcome[[1]]$W)
+for (i in 1:n_rep){
+  bs_mat_oracle[i] <- brier_score(probabilities=sim_results[["true_e"]][[i]], 
+                      outcome=sim_results[["outcome"]][[i]]$W, 
+                      binary = FALSE)
+
+  for (c in seq_along(classifiers)) {
+    classifier <- classifiers[c]
+
+    bs_mat[i, c] <- brier_score(probabilities=sim_results[[classifier]][[i]], 
+                      outcome=sim_results[["outcome"]][[i]]$W, 
+                      binary = FALSE)
+    
+    rmse_mat[i, c] <- sqrt(mean(rowMeans((sim_results[[classifier]][[i]] - sim_results[["true_e"]][[i]])^2, na.rm = TRUE), na.rm = TRUE))
+
+    ll_mat[i, c] <- cross_entropy(sim_results[[classifier]][[i]], sim_results[["outcome"]][[i]]$W)
+  }
+}
+```
+
+### Reshape and aggregate results
+
+1.  Brier score
+
+```{r}
+bs_long <- bs_mat %>%
+  as.data.frame() %>%
+  pivot_longer(cols = everything())  %>%
+  # Separate the 'name' into 'classifier' and 'version' columns
+  mutate(version = case_when(
+           str_detect(name, "^ovr_") ~ "one-vs-rest",
+           str_detect(name, "^ovo_") ~ "one-vs-one",
+           TRUE ~ "multi-class"
+         ),
+         name = gsub("ovr_|ovo_", "", name)
+         )
+bs_wide <- bs_long %>%
+  group_by(version, name) %>% 
+  summarise(value = round(mean(value), 635)) %>% 
+  spread(key = version, value = value) 
+
+kable(bs_wide, caption = "Brier Score")
+```
+
+2.  RMSE
+
+```{r}
+rmse_long <- rmse_mat %>%
+  as.data.frame() %>%
+  pivot_longer(cols = everything())  %>%
+  # Separate the 'name' into 'classifier' and 'version' columns
+  mutate(version = case_when(
+           str_detect(name, "^ovr_") ~ "one-vs-rest",
+           str_detect(name, "^ovo_") ~ "one-vs-one",
+           TRUE ~ "multi-class"
+         ),
+         name = gsub("ovr_|ovo_", "", name)
+         ) 
+rmse_wide <- rmse_long %>%
+  group_by(version, name) %>% 
+  summarise(value = round(mean(value), 4)) %>% 
+  spread(key = version, value = value) 
+
+kable(rmse_wide, caption = "RMSE")
+```
+
+3.  Logistic loss
+
+```{r}
+ll_long <- ll_mat %>%
+  as.data.frame() %>%
+  pivot_longer(cols = everything())  %>%
+  # Separate the 'name' into 'classifier' and 'version' columns
+  mutate(version = case_when(
+           str_detect(name, "^ovr_") ~ "one-vs-rest",
+           str_detect(name, "^ovo_") ~ "one-vs-one",
+           TRUE ~ "multi-class"
+         ),
+         name = gsub("ovr_|ovo_", "", name)
+         ) 
+ll_wide <- ll_long %>%
+  group_by(version, name) %>% 
+  summarise(value = round(mean(value), 4)) %>% 
+  spread(key = version, value = value) 
+
+kable(ll_wide, caption = "Log Loss")
+```
+
+Export the final results.
+
+```{r}
+# Write bs_wide data frame as an Excel file
+write.xlsx(bs_wide, file = paste0("sim_results/results_bs_", dataname, ".xlsx"))
+
+# Write mse_wide data frame as an Excel file
+write.xlsx(rmse_wide, file = paste0("sim_results/results_mse_", dataname, ".xlsx"))
+
+```
+
+### Visualization
+
+For the synthetic datasets, the true propensity scores e are known and can be utilized to establish a benchmark for evaluating the Brier score. This reference Brier score calculated using the ground truth e is denoted as BS_oracle. BS_oracle has perfect information of the data and can be seen as a lower bound for the Brier score. A second benchmark for the Brier score is a naïve guess, using equal treatment propensity scores of e = 1/T for every treatment level denoted as BS_naive.
+
+```{r}
+K <- length(unique(sim_results$outcome[[1]]$W)) # number of treatments
+BS_naive <- (((1/K)-1)^2 + (K-1)*((1/K)^2))/K # BS_naive
+BS_oracle <- mean(bs_mat_oracle) # BS_oracle
+  
+plot1 <- ggplot(bs_long, aes(x = value, y = fct_rev(name), fill = version)) +
+  geom_density_ridges(alpha = 0.9, show.legend = FALSE) +
+  geom_vline(xintercept = BS_naive, color="black", linetype = "dashed", size = 0.4) +
+  geom_vline(xintercept = BS_oracle, color="black", linetype = "dashed", size = 0.4) +
+  scale_fill_paletteer_d("tayloRswift::midnightsBloodMoon", direction = 1, dynamic = FALSE) +
+  labs(y="", x="Brier Score", fill="") +
+  theme_bw() +
+  xlim(0.205, 0.25) +
+  scale_y_discrete(labels = rev(classifiers_clean)) +
+  facet_wrap(vars(version))
+plot1
+ggsave(plot1, width = 250, height = 125, units = "mm",
+       filename = "plots/dens1.png")
+
+```
+
+Another way to assess the quality of the predicted propensity scores is to plot them against the ground truth in a scatter plot.
+
+```{r}
+oracle_e <- reshape2::melt(sim_results[["true_e"]][[1]], id.vars = NULL, variable.name = "class", value.name = "true")
+for (c in classifiers){
+  predicted_e <- reshape2::melt(sim_results[[c]][[1]], id.vars = NULL, variable.name = "class", value.name = "prediction") %>% select(-class)
+
+  plot_data <- cbind(predicted_e, oracle_e)
+  
+  scatter_plot <- ggplot(data = plot_data,aes(y = prediction, x = true, color=class)) +
+    geom_point(alpha = 0.3, size=1) +
+    geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") + 
+    theme_bw() +
+    scale_color_manual(values=c("#D890A0FF", "#282020FF", "#F8B840FF")) +
+    labs(
+          x = "Predicted Probabilities ê(w)",
+          y = "True Probailities e(w)",
+          color = "W"
+          #title = paste0("Simulation results of ", c)
+        ) +
+    xlim(0,1) + ylim(0,1)
+  
+  plot(scatter_plot)
+  ggsave(scatter_plot, width = 125, height = 75, units = "mm",
+         filename = paste0("plots/truevspred_", c, ".png"))
+}
+```
+
+# Imbens 2016
+
+### Import simulation results
+
+```{r}
+dataname <- "Imbens_2016"
+
+sim_results <- readRDS(paste0("sim_results/simulation_results_final_", dataname,"_", n_rep, ".rds"))
+```
+
+### Compute average evaluation metrics
+
+The predicted propensity score are evaluated using the Brier score, the RMSE and the logistic loss.
+
+```{r}
+bs_mat <- matrix(NA, nrow = n_rep, ncol = length(classifiers), dimnames = list(NULL, classifiers))
+ll_mat <- matrix(NA, nrow = n_rep, ncol = length(classifiers), dimnames = list(NULL, classifiers))
+rmse_mat <- matrix(NA, nrow = n_rep, ncol = length(classifiers), dimnames = list(NULL, classifiers))
+
+bs_mat_oracle <- matrix(NA, nrow=n_rep, ncol = 1)
+
+n=length(sim_results$outcome[[1]]$W)
+for (i in 1:n_rep){
+  bs_mat_oracle[i] <- brier_score(probabilities=sim_results[["true_e"]][[i]], 
+                      outcome=sim_results[["outcome"]][[i]]$W, 
+                      binary = FALSE)
+
+  for (c in seq_along(classifiers)) {
+    classifier <- classifiers[c]
+
+    bs_mat[i, c] <- brier_score(probabilities=sim_results[[classifier]][[i]], 
+                      outcome=sim_results[["outcome"]][[i]]$W, 
+                      binary = FALSE)
+    
+    rmse_mat[i, c] <- sqrt(mean(rowMeans((sim_results[[classifier]][[i]] - sim_results[["true_e"]][[i]])^2, na.rm = TRUE), na.rm = TRUE))
+
+    ll_mat[i, c] <- cross_entropy(sim_results[[classifier]][[i]], sim_results[["outcome"]][[i]]$W)
+  }
+}
+```
+
+### Reshape and aggregate results
+
+1.  Brier score
+
+```{r}
+bs_long <- bs_mat %>%
+  as.data.frame() %>%
+  pivot_longer(cols = everything())  %>%
+  # Separate the 'name' into 'classifier' and 'version' columns
+  mutate(version = case_when(
+           str_detect(name, "^ovr_") ~ "one-vs-rest",
+           str_detect(name, "^ovo_") ~ "one-vs-one",
+           TRUE ~ "multi-class"
+         ),
+         name = gsub("ovr_|ovo_", "", name)
+         )
+bs_wide <- bs_long %>%
+  group_by(version, name) %>% 
+  summarise(value = round(mean(value), 4)) %>% 
+  spread(key = version, value = value) 
+
+kable(bs_wide, caption = "Brier Score")
+```
+
+2.  RMSE
+
+```{r}
+rmse_long <- rmse_mat %>%
+  as.data.frame() %>%
+  pivot_longer(cols = everything())  %>%
+  # Separate the 'name' into 'classifier' and 'version' columns
+  mutate(version = case_when(
+           str_detect(name, "^ovr_") ~ "one-vs-rest",
+           str_detect(name, "^ovo_") ~ "one-vs-one",
+           TRUE ~ "multi-class"
+         ),
+         name = gsub("ovr_|ovo_", "", name)
+         ) 
+rmse_wide <- rmse_long %>%
+  group_by(version, name) %>% 
+  summarise(value = round(mean(value), 4)) %>% 
+  spread(key = version, value = value) 
+
+kable(rmse_wide, caption = "RMSE")
+```
+
+3.  Logistic loss
+
+```{r}
+ll_long <- ll_mat %>%
+  as.data.frame() %>%
+  pivot_longer(cols = everything())  %>%
+  # Separate the 'name' into 'classifier' and 'version' columns
+  mutate(version = case_when(
+           str_detect(name, "^ovr_") ~ "one-vs-rest",
+           str_detect(name, "^ovo_") ~ "one-vs-one",
+           TRUE ~ "multi-class"
+         ),
+         name = gsub("ovr_|ovo_", "", name)
+         ) 
+ll_wide <- ll_long %>%
+  group_by(version, name) %>% 
+  summarise(value = round(mean(value), 4)) %>% 
+  spread(key = version, value = value) 
+
+kable(ll_wide, caption = "Log Loss")
+```
+
+Export the final results.
+
+```{r}
+# Write bs_wide data frame as an Excel file
+write.xlsx(bs_wide, file = paste0("sim_results/results_bs_", dataname, ".xlsx"))
+
+# Write mse_wide data frame as an Excel file
+write.xlsx(rmse_wide, file = paste0("sim_results/results_mse_", dataname, ".xlsx"))
+
+```
+
+### Visualization
+
+```{r}
+K <- length(unique(sim_results$outcome[[1]]$W))
+BS_naive <- (((1/K)-1)^2 + (K-1)*((1/K)^2))/K
+LL_unif <- -(log(1/K) + log(1-(1/K)))
+BS_oracle <- mean(bs_mat_oracle)
+  
+plot2 <- ggplot(bs_long, aes(x = value, y = fct_rev(name), fill = version)) +
+  geom_density_ridges(alpha = 0.9, show.legend = FALSE) +
+  geom_vline(xintercept = BS_naive, color="black", linetype = "dashed") +
+  geom_vline(xintercept = BS_oracle, color="black", linetype = "dashed") +
+  scale_fill_paletteer_d("tayloRswift::midnightsBloodMoon", direction = 1, dynamic = FALSE) +
+  labs(y="", x="Brier Score", fill="") +
+  theme_bw() +
+  xlim(0.215, 0.25) +
+  scale_y_discrete(labels = rev(classifiers_clean)) +
+  facet_wrap(vars(version))
+plot2
+ggsave(plot2, width = 250, height = 125, units = "mm",
+       filename = "plots/dens2.png")
+
+```
+
+```{r}
+pi <- sim_results$true_e[[1]]
+
+bs_oracle <- brier_score(probabilities = pi, outcome = sim_results[["outcome"]][[1]]$W)
+ll_oracle <- cross_entropy(probabilities = pi, outcome = sim_results[["outcome"]][[1]]$W)
+
+predicted_e <- reshape2::melt(sim_results[[c]][[1]], id.vars = NULL, variable.name = "class", value.name = "prediction")
+
+for (c in classifiers){
+  oracle_e <- reshape2::melt(pi, id.vars = NULL, variable.name = "class", value.name = "true") %>% select(true)
+  plot_data <- cbind(predicted_e, oracle_e)
+
+  scatter_plot <- ggplot(data = plot_data,aes(y = prediction, x = true, color=class)) +
+    geom_point(alpha = 0.3) +
+    geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") + 
+    geom_smooth(color="red", se = FALSE, linewidth = 0.7)+
+    theme_bw() +
+    scale_color_paletteer_d("tayloRswift::midnightsBloodMoon", direction = 1, dynamic = FALSE) +
+    labs(
+          x = "Predicted Probabilities",
+          y = "True Probailities",
+          title = paste0("Simulation results of ", c)
+        ) +
+    xlim(0,1) + ylim(0,1)
+
+plot(scatter_plot)
+}
+```
+
+# Acharky 2023
+
+### Import simulation results
+
+```{r}
+dataname <- "Acharky_2023"
+n_rep <- 100
+
+sim_results <- readRDS(paste0("sim_results/simulation_results_ovo_", dataname,"_", n_rep, ".rds"))
+```
+
+### Compute average evaluation metrics
+
+The predicted propensity score are evaluated using the Brier score and the logistic loss. As for the semi-synthetic dataset the ground truth of the propensity score is not know, the RMSE cannot be calculated.
+
+```{r}
+bs_mat <- matrix(NA, nrow = n_rep, ncol = length(classifiers), dimnames = list(NULL, classifiers))
+ll_mat <- matrix(NA, nrow = n_rep, ncol = length(classifiers), dimnames = list(NULL, classifiers))
+n=length(sim_results$outcome[[1]]$W)
+for (c in seq_along(classifiers)) {
+  classifier <- classifiers[c]
+  for (i in 1:n_rep){
+    bs <- brier_score(sim_results[[classifier]][[i]], sim_results[["outcome"]][[i]]$W, binary = FALSE)
+    bs_mat[i, c] <- bs
+    
+    ll <- cross_entropy(sim_results[[classifier]][[i]], sim_results[["outcome"]][[i]]$W)
+    ll_mat[i, c] <- ll
+  }
+}
+```
+
+### Reshape and aggregate results
+
+1.  Brier score
+
+```{r}
+bs_long <- bs_mat %>%
+  as.data.frame() %>%
+  pivot_longer(cols = everything())  %>%
+  # Separate the 'name' into 'classifier' and 'version' columns
+  mutate(version = case_when(
+           str_detect(name, "^ovr_") ~ "one-vs-rest",
+           str_detect(name, "^ovo_") ~ "one-vs-one",
+           TRUE ~ "multi-class"
+         ),
+         name = gsub("ovr_|ovo_", "", name)
+         )
+bs_wide <- bs_long %>%
+  group_by(version, name) %>% 
+  summarise(value = round(mean(value), 6)) %>% 
+  spread(key = version, value = value) 
+
+kable(bs_wide, caption = "Brier Score")
+```
+
+2.  Logistic loss
+
+```{r}
+ll_long <- ll_mat %>%
+  as.data.frame() %>%
+  pivot_longer(cols = everything())  %>%
+  # Separate the 'name' into 'classifier' and 'version' columns
+  mutate(version = case_when(
+           str_detect(name, "^ovr_") ~ "one-vs-rest",
+           str_detect(name, "^ovo_") ~ "one-vs-one",
+           TRUE ~ "multi-class"
+         ),
+         name = gsub("ovr_|ovo_", "", name)
+         ) 
+ll_wide <- ll_long %>%
+  group_by(version, name) %>% 
+  summarise(value = round(mean(value), 4)) %>% 
+  spread(key = version, value = value) 
+
+kable(ll_wide, caption = "Log Loss")
+```
+
+Export the final results.
+
+```{r}
+# Write bs_wide data frame as an Excel file
+write.xlsx(bs_wide, file = paste0("sim_results/results_bs_", dataname, ".xlsx"))
+```
+
+### Visualization
+
+```{r}
+K <- length(unique(sim_results$outcome[[1]]$W))
+BS_oracle <- (((1/K)-1)^2 + (K-1)*((1/K)^2))/K
+LL_unif <- -(log(1/K) + log(1-(1/K)))
+
+plot3 <- ggplot(bs_long, aes(x = value, y = fct_rev(name), fill = version)) +
+  geom_density_ridges(alpha = 0.9, show.legend = FALSE) +
+  geom_vline(xintercept = BS_oracle, color="black", linetype = "dashed") +
+  scale_fill_paletteer_d("tayloRswift::midnightsBloodMoon", direction = 1, dynamic = FALSE) +
+  labs(y="", x="Brier Score", fill="") +
+  theme_bw() +
+  scale_x_continuous(breaks = c(0.071, 0.0715, 0.072), limits = c(0.0708, 0.0721)) +
+  scale_y_discrete(labels = rev(classifiers_clean)) +
+  facet_wrap(vars(version))
+plot3
+ggsave(plot3, width = 250, height = 125, units = "mm",
+       filename = "plots/dens3.png")
+
+```
+
+```{r}
+for (c in classifiers){
+  plot(make_calibtation_plot(probabilities = sim_results[[c]][[1]], outcome = sim_results$outcome[[1]]$W, method = c))
+}
+```

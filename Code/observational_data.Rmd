@@ -8,10 +8,10 @@ output:
     code_folding: show
 ---
 
-```{r, message=FALSE, echo=FALSE,warning=FALSE}
-source("packages.R")
-source("ml_wrapper.R")
-source("eval_functions.R")
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+source("functions/packages.R")
+source("functions/ml_wrapper.R")
+source("functions/eval_functions.R")
 
 set.seed(42)
 options(scipen= 999)
@@ -19,39 +19,52 @@ options(scipen= 999)
 
 # Students Dropout
 
+The dataset is taken from <https://archive.ics.uci.edu/dataset/697/predict+students+dropout+and+academic+success> and includes student information from diverse undergraduate programs, acquired from multiple databases. In detail, it contains data on enrollment information, demographics, socio-economic factors, and academic performance after the first and second semesters.
+
 ```{r, message=FALSE}
 dataname <- "students_dropout"
 dataset <- read_delim("data/predict+students+dropout+and+academic+success.zip", 
                                                             delim = ";", escape_double = FALSE, trim_ws = TRUE)
 ```
 
-Define outcome variable and confounders
+The outcome variable `Target` is a categorical variable with T=3 levels:
+
+| Target   | Observations | Frequency |
+|----------|--------------|-----------|
+| Dropout  | 1421         | 0.3212025 |
+| Enrolled | 794          | 0.1794756 |
+| Graduate | 2209         | 0.4993219 |
+
+### Prepare dataset
+
+The dataset has 4424 observations and is balanced towards class `Target == 'Graduate'`. There are 36 confounding variables. The `model.matrix()`function one hot encodes the categorical columns, which yields 102 after encoding. Further, the `make.names()` removes all spaces and other symbols and makes syntactically valid names out of character vector.
+
 ```{r}
 X <- dataset %>% 
   select(-Target) %>% 
   mutate(Course = as.factor(Course),
          International = as.factor(International),
+          Gender = as.factor(Gender),
          `Application mode` = as.factor(`Application mode`),
          `Previous qualification` = as.factor(`Previous qualification`),
          Nacionality = as.factor(Nacionality))
 
 X <- model.matrix(~ . - 1, data = X)
+X <- X[, -c(11, 12, 19, 41, 46, 47, 60, 61, 66, 73, 74)]
 
 # Clean column names
 clean_colnames <- make.names(colnames(X))
 colnames(X) <- clean_colnames
 
 W <- as.numeric(factor(dataset$Target))
-kable(table(dataset$Target)/length(W), col.names = c("Target", "Frequency"))
-kable(table(dataset$Target)/length(W), col.names = c("Target", "Frequency"))
+#kable(table(dataset$Target), col.names = c("Target", "Frequency"))
+#kable(table(dataset$Target)/length(W), col.names = c("Target", "Frequency"))
 ```
 
-Split dataset into training and test data
+Next, the dataset is split into 80% training and 20% test data.
 
 ```{r}
 split_indices <- sample.split(dataset$Target, SplitRatio = 0.8)
-training_data <- dataset[split_indices, ]
-test_data <- dataset[!split_indices, ]
 
 W_training <- W[split_indices]
 W_test <- W[!split_indices]
@@ -62,17 +75,18 @@ X_test <- as.matrix(data.frame(X[!split_indices, ]))
 kable(head(X_training))
 ```
 
-
 ```{r}
 pi <- table(W_training)/length(W_training)
 pi <- t(replicate(length(W_test), pi))
 BS_naive <- brier_score(pi, W_test)
 ```
 
-Fine tuning of classifier
+### Fine tuning of multi-class classifier
+
+The multi-class classifier under go a tuning phase. The `finetune_soft_classifier()` function systematically evaluates model performance across a specified grid of hyperparameter values to determine the optimal combination using 5-fold cross validation.
 
 ```{r, message=FALSE, eval=FALSE}
-source("ml_methods.R")
+source("functions/methods.R")
 
 classifiers <- list(logit = multinomial_logit, 
                     logit_nnet = multinomial_logit_nnet, 
@@ -93,14 +107,16 @@ for (c in names(classifiers)){
 saveRDS(tuning_results, file = paste0("sim_results/tuning_results_", dataname, ".rds"))
 ```
 
-Fit models
+### Fit models and make predictions
 
-```{r}
+Once the optimal hyperparameter are determined the different models are fit and are evaluated based on their performance on the test data. LDA and QDA are excludud from the analysis of this dataset as the computation of their covariance matrix does not hold for that amount of dummy valriables.
+
+```{r, warning=FALSE, eval=FALSE}
 classifiers <- c(
   "adaboost",  "bagging", "knn",
-  "lda", "logit", "logit_nnet",
+  "logit", "logit_nnet",
   "mlpc", "nb_bernulli", "nb_gaussian",
-  "probability_forest", "qda", "ranger", "svm", "xgboost"
+  "probability_forest", "ranger", "svm", "xgboost"
 )
 classifiers_mc <- c(
   "knn", "lda", "logit", "logit_nnet",
@@ -148,7 +164,7 @@ for (c in seq_along(classifiers)) {
     predictions <- do.call(paste0("predict.", classifier, "_fit"),
                                        list(model, X_training, W_training, xnew = X_test))
     
-    #results[[classifier]] <- as.data.frame(predictions) # Store the results
+    results[[classifier]] <- as.data.frame(predictions) # Store the results
   }
 
   # fit OvR model
@@ -180,7 +196,9 @@ for (c in seq_along(classifiers)) {
 saveRDS(results, file = paste0("sim_results/results_", dataname, ".rds"))
 ```
 
-Evaluation of results
+### Evaluation of results
+
+The results are reshaped such that there is one row for each classification model and one column for ech implementation strategy. Lastly, the results are exported.
 
 ```{r}
 results <- readRDS(file = paste0("sim_results/results_", dataname, ".rds"))
@@ -195,7 +213,6 @@ for (i in seq_along(names(results))) {
 
 bs_long <- bs_mat %>%
   as.data.frame() %>%
-  #pivot_longer(cols = everything())  %>%
   # Separate the 'name' into 'classifier' and 'version' columns
   mutate(version = case_when(
            str_detect(name, "^ovr_") ~ "one-vs-rest",
@@ -211,14 +228,20 @@ bs_wide <- bs_long %>%
   summarise(value = round(mean(value), 4)) %>% 
   spread(key = version, value = value) 
 
+# 
 write.xlsx(bs_wide, file = paste0("sim_results/results_bs_", dataname, ".xlsx"))
 
 kable(bs_wide, caption = "Brier Score")
 
 ```
 
+The best-performing classifier is the \texttt{nnet} logistic regression for the multi-class and the OvO version and the \texttt{glmnet} for OvR version. The probability forests are also among the best-performing models: the multi-class \texttt{ranger} probability forest has the lowest Brier score of 0.1137, but performs slightly worse in the binarised versions, while the \texttt{grf} probability forest performs well in all three implementations. Among the binary-only classifiers, adaBoost and the bagging models achieve the best Brier scores.
+
+### Calibration plots
+
+The calibration plot is a visualization tool used to assess the performance of probabilistic classification models. This helps to evaluate how well these predicted probabilities align with the actual likelihood of the events being predicted.
+
 ```{r}
-results <- readRDS(file = paste0("sim_results/results_", dataname, ".rds"))
 for (c in names(results)){
   p <- make_calibtation_plot(probabilities = results[[c]], outcome = W_test, method = c)
   plot(p)
@@ -227,15 +250,28 @@ for (c in names(results)){
 }
 ```
 
-
 # Customer Segmentation
+
+The second dataset is taken from <https://www.kaggle.com/datasets/vetrirah/customer>.
 
 ```{r, message=FALSE}
 dataname <- "customer_segmentation"
 dataset <- read_csv("data/customer_segmentation/Train.csv") %>% drop_na()
 ```
 
-Define outcome variable and confounders
+The outcome variable `Target` is a categorical variable with T=4 levels:
+
+| Segmentation | Observations | Frequency |
+|--------------|--------------|-----------|
+| A            | 1616         | 0.2424606 |
+| B            | 1572         | 0.2358590 |
+| C            | 1720         | 0.2580645 |
+| D            | 1757         | 0.2636159 |
+
+### Prepare dataset
+
+The dataset has 4424 observations and is balanced towards class `Target == 'Graduate'`. There are 36 confounding variables. The `model.matrix()`function one hot encodes the categorical columns, which yields 102 after encoding. Further, the `make.names()` removes all spaces and other symbols and makes syntactically valid names out of character vector.
+
 ```{r}
 X <- dataset %>% 
   select(-c(ID,Segmentation)) 
@@ -247,11 +283,11 @@ clean_colnames <- make.names(colnames(X))
 colnames(X) <- clean_colnames
 
 W <- as.numeric(factor(dataset$Segmentation))
-kable(table(dataset$Segmentation), col.names = c("Target", "Frequency"))
+#kable(table(dataset$Segmentation)/nrow(dataset), col.names = c("Segmentation", "Frequency"))
 
 ```
 
-Split dataset into training and test data
+Next, the dataset is split into 80% training and 20% test data.
 
 ```{r}
 split_indices <- sample.split(dataset$Segmentation, SplitRatio = 0.8)
@@ -267,9 +303,11 @@ X_test <- as.matrix(data.frame(X[!split_indices, ]))
 kable(head(X_training))
 ```
 
-Fine tuning of classifier
+### Fine tuning of classifier
 
-```{r, message=FALSE}
+The multi-class classifier under go a tuning phase. The `finetune_soft_classifier()` function systematically evaluates model performance across a specified grid of hyperparameter values to determine the optimal combination using 5-fold cross validation.
+
+```{r, message=FALSE, eval=FALSE}
 source("ml_methods.R")
 classifiers <- list(logit = multinomial_logit, 
                     logit_nnet = multinomial_logit_nnet, 
@@ -290,9 +328,11 @@ for (c in names(classifiers)){
 saveRDS(tuning_results, file = paste0("sim_results/tuning_results_", dataname, ".rds"))
 ```
 
-Fit models
+### Fit models and make predictions
 
-```{r, message=FALSE}
+Once the optimal hyperparameter are determined the different models are fit and are evaluated based on their performance on the test data. LDA and QDA are excludud from the analysis of this dataset as the computation of their covariance matrix does not hold for that amount of dummy valriables.
+
+```{r, message=FALSE, eval=FALSE}
 classifiers <- c(
  "adaboost",  "bagging", "knn",
   "lda", 
@@ -382,9 +422,12 @@ saveRDS(results, file = paste0("sim_results/results_", dataname, ".rds"))
 
 ```
 
-Evaluation of results
+### Evaluation of results
+
+The results are reshaped such that there is one row for each classification model and one column for ech implementation strategy. Lastly, the results are exported.
 
 ```{r}
+results <- readRDS(file = paste0("sim_results/results_", dataname, ".rds"))
 bs_mat <- matrix(nrow = length(names(results)), ncol = 2)
 colnames(bs_mat) <- c("name", "value")
 
@@ -417,18 +460,4 @@ kable(bs_wide, caption = "Brier Score")
 
 ```
 
-
-```{r, message=FALSE}
-results <- readRDS(file = paste0("sim_results/results_", dataname, ".rds"))
-for (c in names(results)){
-  plot(make_calibtation_plot(probabilities = results[[c]], outcome = W_test, method = c))
-}
-```
-
-
-```{r}
-K <- 4 # number of treatments
-BS_naive <- (((1/K)-1)^2 + (K-1)*((1/K)^2))/K # BS_naive
-
-```
-
+Most of the resulting Brier scores are approximately 0.15. Exceptions include the naive Bayes models, SVM and XGBoost and the OvO implementation of \texttt{glmnet}'s logistic regression which demonstrates notably inferior performance. The models using one of the binarisation methods are not outperformed by their multi-class counterparts. The \texttt{grf} probability forest archives in all implementations the lowest Brier score, slightly lower than the \texttt{ranger} probability forest results.

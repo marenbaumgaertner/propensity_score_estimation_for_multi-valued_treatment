@@ -8,6 +8,8 @@ output:
     code_folding: show
 ---
 
+This notebook uses the result from the fine tuning procedure from the notebook fine_tine.Rmd and simply find the optimal values for the hyperparameters by using either the median or the mode for non-numeric parameters. Note that the `extratrees` splitting rule from the `ranger` probability forest by default uses the whole sample no matter how the input is defined. Therefore, sample is set to 1 if `extratrees` splitting rule is chosen.
+
 ```{r}
 library(knitr)
 library(dplyr)
@@ -28,11 +30,11 @@ convert_to_numeric_if_possible <- function(x) {
 
 ```
 
+the `convert_to_numeric_if_possible()` function converts non categorical column into numeric ones as within the list everything is stored as string but to compute the median these need to be numeric.
 
+## Imbens 2016
 ```{r}
 dataname <- "Imbens_2016"
-#dataname <- "Linden_2015"
-#dataname <- "Archarky_2023"
 n_iter = 10
 results <- readRDS(paste0("sim_results/tuning_results_", dataname, "_", n_iter, "_iterations.rds"))
 
@@ -71,10 +73,9 @@ saveRDS(final_values, file = paste0("sim_results/final_tuning_results_", datanam
 
 ```
 
+## Linden 2015
 ```{r}
-#dataname <- "Imbens_2016"
 dataname <- "Linden_2015"
-#dataname <- "Archarky_2023"
 n_iter = 10
 results <- readRDS(paste0("sim_results/tuning_results_", dataname, "_", n_iter, "_iterations.rds"))
 
@@ -112,9 +113,8 @@ saveRDS(final_values, file = paste0("sim_results/final_tuning_results_", datanam
 
 ```
 
+## Acharky 2023
 ```{r}
-#dataname <- "Imbens_2016"
-#dataname <- "Linden_2015"
 dataname <- "Acharky_2023"
 n_iter = 10
 results <- readRDS(paste0("sim_results/tuning_results_", dataname, "_", n_iter, "_iterations.rds"))
@@ -150,5 +150,3 @@ names(final_values) <- classifiers_tuned
 saveRDS(final_values, file = paste0("sim_results/final_tuning_results_", dataname, ".rds"))
 
 ```
-
-
