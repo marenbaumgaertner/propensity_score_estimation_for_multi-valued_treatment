@@ -390,22 +390,22 @@ predict.nb_gaussian_fit = function(nb_gaussian_fit,x,y,xnew=NULL,weights=FALSE){
   fit
 }
 
-#' This function calculates the Bernulli Naive Bayes model based on the \code{\link{naivebayes}} package 
+#' This function calculates the bernoulli Naive Bayes model based on the \code{\link{naivebayes}} package 
 #'
 #' @param x Covariate matrix of training sample
 #' @param y Vector of outcomes of training sample
 #' @param args List of arguments passed to  \code{\link{naivebayes}}
 #' @import naivebayes
 #'
-#' @return An object with S3 method for class 'bernulli_naive_bayes'
+#' @return An object with S3 method for class 'bernoulli_naive_bayes'
 #'
-nb_bernulli_fit = function(x,y,args=list()){
+nb_bernoulli_fit = function(x,y,args=list()){
   y = as.factor(y)
   model = do.call(naive_bayes, c(list(x=x,y=y),args))
   model
 }
-#' Prediction based on Bernulli Naive Bayes model.
-#' @param nb_bernulli_fit Output of \code{\link{naive_bayes}} or \code{\link{nb_bernulli_fit}}
+#' Prediction based on bernoulli Naive Bayes model.
+#' @param nb_bernoulli_fit Output of \code{\link{naive_bayes}} or \code{\link{nb_bernoulli_fit}}
 #' @param x Covariate matrix of training sample
 #' @param y Vector of outcomes of training sample
 #' @param xnew Covariate matrix of test sample
@@ -417,13 +417,13 @@ nb_bernulli_fit = function(x,y,args=list()){
 #'
 #' @keywords internal
 #'
-predict.nb_bernulli_fit = function(nb_bernulli_fit,x,y,xnew=NULL,weights=FALSE){
+predict.nb_bernoulli_fit = function(nb_bernoulli_fit,x,y,xnew=NULL,weights=FALSE){
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
     warning("Weights are not supported for propensity score estimation.")
   }
   
-  fit = predict(nb_bernulli_fit, newdata=xnew, type = "prob")
+  fit = predict(nb_bernoulli_fit, newdata=xnew, type = "prob")
   #list("prediction"=fit,  "weights"="No weighted representation available.")
   fit
 }

@@ -42,13 +42,12 @@ knn$params <- params
 knn$fit <- knn_fit
 knn$predict <- predict.knn_fit
 knn$grid <- expand.grid(kmax = seq(5,30,5),
-                        #distance = seq(1,5,1),
                         kernel = c("rectangular", "gaussian", "optimal"))
 
 
 
-# Naive Bayes bernulli
-nb_bernulli <- list(
+# Naive Bayes bernoulli
+nb_bernoulli <- list(
   type = "Classification",
   library = "naivebayes",
   multiclass = TRUE,
