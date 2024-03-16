@@ -1,304 +1,3 @@
-#' Calculates arithmetic mean.
-#'
-#' @param x Covariate matrix of training sample
-#' @param y Vector of outcomes of training sample
-#'
-#' @return Returns list containing mean and number of observations
-#'
-#' @keywords internal
-#'
-mean_fit = function(x,y) {
-  mean = mean(y)
-  output = list("mean"=mean,"n"=nrow(x))
-  output
-}
-
-#' Predicts arithmetic mean and provides prediction weights if required.
-#' @param mean_fit Output of \code{\link{mean_fit}}
-#' @param x Covariate matrix of training sample
-#' @param y Vector of outcomes of training sample
-#' @param xnew Covariate matrix of test sample
-#' @param weights If TRUE, weights underlying the prediction for xnew calculated
-#'
-#' @return Returns list containing:
-#' \item{prediction}{vector of predictions for xnew}
-#' \item{weights}{If \code{weights=TRUE} prediction weights of dimension \code{nrow(xnew)} x \code{nrow(x)}
-#' containing the weights that deliver predictions where each row gives the weight that each training
-#' outcome received in the prediction for xnew.}
-#'
-#' @keywords internal
-#'
-predict.mean_fit = function(mean_fit,x,y,xnew=NULL,weights=FALSE) {
-  if (is.null(xnew)) fit = rep(mean_fit$mean,nrow(x))
-  else fit = rep(mean_fit$mean,nrow(xnew))
-  
-  if (isTRUE(weights)) w = matrix(1 / length(y),nrow(xnew),nrow(x))
-  else w = NULL
-  
-  list("prediction"=fit, "weights"=w)
-}
-
-
-#' Calculates OLS fit.
-#'
-#' @param x Covariate matrix of training sample
-#' @param y Vector of outcomes of training sample
-#'
-#' @return Returns OLS coefficients
-#'
-#' @keywords internal
-#'
-ols_fit = function(x,y) {
-  x = cbind(rep(1,nrow(x)),x)
-  ols_coef = lm.fit(x,y)$coefficients
-  ols_coef
-}
-
-
-#' Prediction based on OLS and provides prediction weights if required.
-#' @param ols_fit Output of \code{\link{ols_fit}}
-#' @param x Covariate matrix of training sample
-#' @param y Vector of outcomes of training sample
-#' @param xnew Covariate matrix of test sample
-#' @param weights If TRUE, weights underlying the prediction for xnew calculated
-#'
-#' @return Returns list containing:
-#' \item{prediction}{vector of predictions for xnew}
-#' \item{weights}{If \code{weights=TRUE} prediction weights of dimension \code{nrow(xnew)} x \code{nrow(x)}
-#' containing the weights that deliver predictions where each row gives the weight that each training
-#' outcome received in the prediction for xnew.}
-#'
-#' @keywords internal
-#'
-predict.ols_fit = function(ols_fit,x,y,xnew=NULL,weights=FALSE) {
-  if (is.null(xnew)) xnew = x
-  
-  x = cbind(rep(1,nrow(x)),x)
-  xnew = cbind(rep(1,nrow(xnew)),xnew)
-  
-  # Remove variables that were dropped due to collinearity
-  x = x[,!is.na(ols_fit)]
-  xnew = xnew[,!is.na(ols_fit)]
-  
-  # Calculate hat matrix
-  hat_mat = xnew %*% solve(crossprod(x),tol=2.225074e-308) %*% t(x)
-  fit = hat_mat %*% y
-  
-  if (weights==FALSE) hat_mat = NULL
-  
-  list("prediction"=fit,"weights"=hat_mat)
-}
-
-
-#' This function estimates cross-validated ridge regression based on the \code{\link{glmnet}} package
-#'
-#' @param x Matrix of covariates (number of observations times number of covariates matrix)
-#' @param y vector of outcomes
-#' @param args List of arguments passed to  \code{\link{glmnet}}
-#' @import glmnet
-#'
-#' @return An object with S3 class "glmnet"
-#'
-#' @keywords internal
-#'
-ridge_fit = function(x,y,args=list()) {
-  ridge = do.call(cv.glmnet,c(list(x=x,y=y,alpha=0),args))
-  ridge
-}
-
-#' Prediction based on Ridge and provides prediction weights if required.
-#' @param ridge_fit Output of \code{\link{ridge_fit}}
-#' @param x Covariate matrix of training sample
-#' @param y Vector of outcomes of training sample
-#' @param xnew Covariate matrix of test sample
-#' @param weights If TRUE, weights underlying the prediction for xnew calculated
-#'
-#' @return Returns list containing:
-#' \item{prediction}{vector of predictions for xnew}
-#' \item{weights}{If \code{weights=TRUE} prediction weights of dimension \code{nrow(xnew)} x \code{nrow(x)}
-#' containing the weights that deliver predictions where each row gives the weight that each training
-#' outcome received in the prediction for xnew.}
-#'
-#' @keywords internal
-#'
-predict.ridge_fit = function(ridge_fit,x,y,xnew=NULL,weights=FALSE) {
-  if (is.null(xnew)) xnew = x
-  
-  fit = predict(ridge_fit,newx=xnew,type="response")
-  
-  if (weights==FALSE) hat_mat = NULL
-  else {
-    # Get covariate matrices
-    n = nrow(x)
-    p = ncol(x)
-    x = scale(x)
-    x = cbind(rep(1,nrow(x)),x)
-    xnew = scale(xnew)
-    xnew = cbind(rep(1,nrow(xnew)),xnew)
-    
-    # Calculate hat matrix, see also (https://stats.stackexchange.com/questions/129179/why-is-glmnet-ridge-regression-giving-me-a-different-answer-than-manual-calculat)
-    hat_mat = xnew %*% solve(crossprod(x) + ridge_fit$lambda.min  * n / sd(y) * diag(x = c(0, rep(1,p)))) %*% t(x)
-    fit = hat_mat %*% y
-  }
-  
-  list("prediction"=fit,"weights"=hat_mat)
-}
-
-
-#' This function estimates cross-validated Post-Lasso based on the \code{\link{glmnet}} package
-#'
-#' @param x Matrix of covariates (number of observations times number of covariates matrix)
-#' @param y vector of outcomes
-#' @param args List of arguments passed to  \code{\link{glmnet}}
-#' @import glmnet
-#'
-#' @return An object with S3 class "plasso"
-#'
-#' @keywords internal
-#'
-plasso_fit = function(x,y,args=list()) {
-  plasso = do.call(plasso,c(list(x=x,y=y),args))
-  plasso
-}
-
-
-#' Prediction based on Post-Lasso and provides prediction weights if required.
-#' @param plasso_fit Output of \code{\link{plasso_fit}}
-#' @param x Covariate matrix of training sample
-#' @param y Vector of outcomes of training sample
-#' @param xnew Covariate matrix of test sample
-#' @param weights If TRUE, weights underlying the prediction for xnew calculated
-#'
-#' @return Returns list containing:
-#' \item{prediction}{vector of predictions for xnew}
-#' \item{weights}{If \code{weights=TRUE} prediction weights of dimension \code{nrow(xnew)} x \code{nrow(x)}
-#' containing the weights that deliver predictions where each row gives the weight that each training
-#' outcome received in the prediction for xnew.}
-#'
-#' @keywords internal
-#'
-predict.plasso_fit = function(plasso_fit,x,y,xnew=NULL,weights=FALSE) {
-  if (is.null(xnew)) xnew = x
-  x = add_intercept(x)
-  xnew = add_intercept(xnew)
-  
-  # Fitted values for post lasso
-  nm_act = names(coef(plasso_fit$lasso_full)[,plasso_fit$ind_min_pl])[which(coef(plasso_fit$lasso_full)[,plasso_fit$ind_min_pl] != 0)]
-  
-  xact = x[,nm_act,drop=F]
-  xactnew = xnew[,nm_act,drop=F]
-  
-  # Remove potentially collinear variables
-  coef = lm.fit(xact,y)$coefficients
-  xact = xact[,!is.na(coef)]
-  xactnew = xactnew[,!is.na(coef)]
-  
-  hat_mat = xactnew %*% solve(crossprod(xact),tol=2.225074e-308) %*% t(xact)
-  fit_plasso = hat_mat %*% y
-  if (weights==FALSE) hat_mat = NULL
-  
-  list("prediction"=fit_plasso,"weights"=hat_mat)
-}
-
-
-#' Calculates Random Forest fit using the \code{\link{grf}} package
-#'
-#' @param x Matrix of covariates
-#' @param y vector of outcomes
-#' @param args List of arguments passed to  \code{\link{regression_forest}}
-#' @import grf
-#'
-#' @return An object with S3 class "regression_forest"
-#'
-#' @keywords internal
-#'
-forest_grf_fit = function(x,y,args=list()) {
-  rf = do.call(regression_forest,c(list(X=x,Y=y),args))
-  rf
-}
-
-
-#' Prediction based on Random Forest and provides prediction weights if required.
-#' @param forest_grf_fit Output of \code{\link{regression_forest}} or \code{\link{forest_grf_fit}}
-#' @param x Covariate matrix of training sample
-#' @param y Vector of outcomes of training sample
-#' @param xnew Covariate matrix of test sample
-#' @param weights If TRUE, weights underlying the prediction for xnew calculated
-#'
-#' @return Returns list containing:
-#' \item{prediction}{vector of predictions for xnew}
-#' \item{weights}{If \code{weights=TRUE} prediction weights of dimension \code{nrow(xnew)} x \code{nrow(x)}
-#' containing the weights that deliver predictions where each row gives the weight that each training
-#' outcome received in the prediction for xnew.}
-#'
-#' @keywords internal
-#'
-predict.forest_grf_fit = function(forest_grf_fit,x,y,xnew=NULL,weights=FALSE) {
-  if (is.null(xnew)) xnew = x
-  
-  fit = predict(forest_grf_fit,newdata=xnew)$prediction
-  
-  if (weights==TRUE) {
-    if (packageVersion("grf") < "2.0.0") w = get_sample_weights(forest_grf_fit,newdata=xnew)
-    else  w = get_forest_weights(forest_grf_fit,newdata=xnew)
-  }
-  else w = NULL
-  
-  list("prediction"=fit, "weights"=w)
-}
-
-
-
-
-#' This function estimates cross-validated lasso regression based on the \code{\link{glmnet}} package
-#'
-#' @param x Matrix of covariates (number of observations times number of covariates matrix)
-#' @param y vector of outcomes
-#' @param args List of arguments passed to  \code{\link{glmnet}}
-#' @import glmnet
-#'
-#' @return An object with S3 class "glmnet"
-#'
-#' @keywords internal
-#'
-lasso_fit = function(x,y,args=list()) {
-  lasso = do.call(cv.glmnet,c(list(x=x,y=y),args))
-  lasso
-}
-
-
-#' Prediction based on Lasso Forest and provides prediction weights if required.
-#' @param lasso_fit Output of \code{\link{glmnet}} or \code{\link{lasso_fit}}
-#' @param x Covariate matrix of training sample
-#' @param y Vector of outcomes of training sample
-#' @param xnew Covariate matrix of test sample
-#' @param weights Always FALSE as
-#'
-#' @return Returns list containing:
-#' \item{prediction}{vector of predictions for xnew}
-#' \item{weights}{Not available for Lasso, only for Post-Lasso}
-#'
-#' @keywords internal
-#'
-predict.lasso_fit = function(lasso_fit,x,y,xnew=NULL,weights=FALSE) {
-  f = function() stop("No weighted representation of Lasso available.",call.=FALSE)
-  if (isTRUE(weights)) f()
-  if (is.null(xnew)) xnew = x
-  
-  fit = predict(lasso_fit,newx=xnew,type="response",s="lambda.min")
-  
-  list("prediction"=fit,"weights"="No weighted representation of Lasso available.")
-}
-
-
-################################################################################
-################################################################################
-############ Hier fangen meine Funktionen an ###################################
-################################################################################
-################################################################################
-
-
-
 #' This function calculates the (multinomial) logistic regression based on the \code{\link{glmnet}} package 
 #'
 #' @param x Covariate matrix of training sample
@@ -455,20 +154,7 @@ xgboost_fit = function(x,y,args=list(nrounds=40, eta=0.01)){
   model
 }
 
-#xgboost_fit <- function(x, y, args=list()) {
-#  K <- length(unique(y))
-#  
-#  if (K == 2) {
-#    model <- xgboost(data = x, label = y, nrounds = 100,
-#                     objective = "binary:logistic", eval_metric = "logloss", max_depth = 5, verbose=0, args)
-#  } else {
-#    if (min(y)==1) y <- y - 1
-#    model <- xgboost(data = x, label = y, nrounds = 100, num_class = K,
-#                     objective = "multi:softprob", eval_metric = "mlogloss", max_depth = 5, verbose=0, args)
-#  }
-#  
-#  model
-#}
+
 
 #' Prediction based on xgboost model.
 #' @param xgboost_fit Output of \code{\link{xgboost}} or \code{\link{xgboost_fit}}
@@ -727,59 +413,6 @@ predict.bagging_fit = function(bagging_fit,x,y,xnew=NULL,weights=FALSE){
   }
   list("prediction"=fit,  "weights"="No weighted representation available.")
 }
-
-
-# #' Calculates AdaBoost.M1 fit using the \code{\link{adabag}} package
-# #'
-# #' @param x Matrix of covariates
-# #' @param y vector of outcomes
-# #' @param args List of arguments passed to  \code{\link{boosting}}
-# #' @import adabag
-# #'
-# #' @return An object with S3 class "boosting"
-# #'
-# #' @keywords internal
-# #'
-# boosting_fit = function(x, y, args = list()) {
-#   data <- data.frame(y = as.factor(y), x)
-#   model = do.call(boosting, c(list(formula = y ~ ., data = data,
-#                                   mfinal = 50,
-#                                   control = rpart.control(objective = "binary:logistic",
-#                                                           eval_metric = "rmse",
-#                                                           eta = 0.3, max_depth = 2,
-#                                                           minsplit = 10,  # Adjust minsplit to an appropriate value
-#                                                           cp = -1
-#                                   )), args))
-#   model
-# }
-# #' Prediction based on AdaBoost.M1.
-# #' @param boosting_fit Output of \code{\link{boosting}} or \code{\link{boosting_fit}}
-# #' @param x Covariate matrix of training sample
-# #' @param y Vector of outcomes of training sample
-# #' @param xnew Covariate matrix of test sample
-# #' @param weights Always FALSE
-# #'
-# #' @return Returns list containing:
-# #' \item{prediction}{vector of predictions for xnew}
-# #' \item{weights}{Not supported for propensity score estimation}
-# #'
-# #' @keywords internal
-# #'
-# predict.boosting_fit = function(boosting_fit,x,y,xnew=NULL,weights=FALSE){
-#   if (is.null(xnew)) xnew = x
-#   if (weights==TRUE) {
-#     warning("Weights are not supported for propensity score estimation.")
-#   }
-#   
-#   data = as.data.frame(xnew)
-#   data$y <- as.factor(0)
-#   
-#   fit = predict(boosting_fit, newdata = data)$prob
-#   if (length(unique(y))==2){
-#     colnames(fit) = sort(unique(y))
-#   }  
-#   list("prediction"=fit,  "weights"="No weighted representation available.")
-# }
 
 
 
@@ -1070,7 +703,7 @@ logit_nnet_fit = function(x,y,args=list()){
 #' @param weights Always FALSE as
 #'
 #' @return Returns list containing:
-#' \item{prediction}{vector of predictions for xnew}
+#' \item{prediction}{matrix of predictions for xnew}
 #' \item{weights}{Not supported for propensity score estimation}
 #'
 #' @keywords internal
@@ -1099,6 +732,13 @@ predict.logit_nnet_fit = function(multinom_fit, x,y,xnew=NULL,weights=FALSE){
 
 
 # Function to create a one-vs-one classifier
+#' Fits One-Vs-One (OvO) binary classifiers for multi-class classification
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param method Method to use for fitting binary classifiers (e.g., "logit" or "xgboost")
+#' 
+#' @return List of fitted OvO binary classifiers
+#'
 ovo_fit <- function(x, y, method = "logit") {
   
   if (min(y)==0) y = y+1
@@ -1138,19 +778,17 @@ ovo_fit <- function(x, y, method = "logit") {
 # Register parallel backend
 # Adjust the number of cores as per your system configuration
 
+# Function to create a one-vs-one classifier
+#' Fits One-Vs-One (OvO) binary classifiers for multi-class classification in parallel
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param method Method to use for fitting binary classifiers (e.g., "logit" or "xgboost")
+#' 
+#' @return List of fitted OvO binary classifiers
+#'
 ovo_fit_parallel <- function(x, y, method = "logit") {
   
-  #cl <- makeCluster(4)
-  #registerDoParallel(cl)
-  #clusterExport(cl, c(paste0(method, "_fit"), "glmnet", "nnet", "ranger", 
-  #                    "probability_forest", "multinom", "train.kknn",
-  #                    "gaussian_naive_bayes", "bernoulli_naive_bayes",
-  #                    "adaboost", "bagging", "svm", "lda", "qda", "xgboost",
-  #                    "class.ind", "naive_bayes"
-  #                    ))
-  
-  
-  
+  # fist class must be class 1
   if (min(y) == 0) y <- y + 1
   
   class_labels <- sort(unique(y))
@@ -1180,13 +818,24 @@ ovo_fit_parallel <- function(x, y, method = "logit") {
     classifiers
   }
   
-  #stopCluster(cl) # Stop the parallel backend
-  
   return(ovo_classifiers)
 }
 
 # Now you can use ovo_fit_parallel instead of ovo_fit
-
+#' Predicts class probabilities using One-Vs-One (OvO) fitted classifiers 
+#' @param ovo_fit Output list of \code{\link{ovo_fit}} or \code{\link{ovo_fit_parallel}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Flag indicating whether weights are used (unsupported for propensity score estimation)
+#' @param method Method used for fitting the binary classifiers (e.g., "logit" or "xgboost")
+#'
+#' @return Returns list containing:
+#' \item{prediction}{matrix of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, method = "logit") {
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {
@@ -1252,7 +901,21 @@ predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, method = "logi
   return(fit)
 }
 
-
+# Now you can use ovo_fit_parallel instead of ovo_fit
+#' Predicts class probabilities using One-Vs-One (OvO) fitted classifiers in parallel
+#' @param ovo_fit Output list of \code{\link{ovo_fit}} or \code{\link{ovo_fit_parallel}}
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Flag indicating whether weights are used (unsupported for propensity score estimation)
+#' @param method Method used for fitting the binary classifiers (e.g., "logit" or "xgboost")
+#'
+#' @return Returns list containing:
+#' \item{prediction}{matrix of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.ovo_fit_parallel <- function(ovo_fit, x, y, xnew = NULL, weights = FALSE, method = "logit") {
   if (is.null(xnew)) xnew <- x
   if (weights) {
@@ -1320,6 +983,13 @@ predict.ovo_fit_parallel <- function(ovo_fit, x, y, xnew = NULL, weights = FALSE
 
 
 # One-vs-Rest Classifier
+#' Fits One-Vs-Rest (OvR) binary classifiers for multi-class classification 
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param method Method to use for fitting binary classifiers (e.g., "logit" or "xgboost")
+#' 
+#' @return List of fitted OvR binary classifiers
+#'
 ovr_fit <- function(x, y, method = "logit") {
   class_labels <- sort(unique(y))
   num_classes <- length(class_labels)
@@ -1343,7 +1013,21 @@ ovr_fit <- function(x, y, method = "logit") {
   return(ovr_classifiers)
 }
 
-
+# Now you can use ovo_fit_parallel instead of ovo_fit
+#' Predicts class probabilities using One-Vs-One (OvR) fitted classifiers 
+#' @param ovo_fit Output list of \code{\link{ovr_fit}} 
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param xnew Covariate matrix of test sample
+#' @param weights Flag indicating whether weights are used (unsupported for propensity score estimation)
+#' @param method Method used for fitting the binary classifiers (e.g., "logit" or "xgboost")
+#'
+#' @return Returns list containing:
+#' \item{prediction}{matrix of predictions for xnew}
+#' \item{weights}{Not supported for propensity score estimation}
+#'
+#' @keywords internal
+#'
 predict.ovr_fit <- function(ovr_fit,x,y, xnew=NULL,weights=FALSE, method = "logit") {
   if (is.null(xnew)) xnew = x
   if (weights==TRUE) {

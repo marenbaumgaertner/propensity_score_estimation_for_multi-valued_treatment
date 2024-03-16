@@ -1,6 +1,10 @@
-
-
-brier_score <- function(probabilities, outcome, binary = TRUE){
+#' Computes Brier score 
+#' @param probabilities matrix containing the predicted probabilites
+#' @param outcome vector of true classes
+#' 
+#' @return returns Brier score between predictions and ground truth
+#'
+brier_score <- function(probabilities, outcome){
 
   # reshape outcome for multi-valued treatment from 1xN to KxN
   if(length(unique(outcome))==2){
@@ -17,6 +21,12 @@ brier_score <- function(probabilities, outcome, binary = TRUE){
   
 }
 
+#' Comptes cross entropy or multimonial Log Loss
+#' @param probabilities matrix containing the predicted probabilities
+#' @param outcome vector of true classes
+#'
+#' @return returns cross entropy between predictions and ground truth
+#'
 cross_entropy <- function(probabilities, outcome) {
   #  Adjust indices since R indexing starts from 1 if necessary
   if (min(outcome)==0) outcome = outcome + 1
@@ -35,7 +45,15 @@ cross_entropy <- function(probabilities, outcome) {
   return(ll)
 }
 
-
+#' Creates calibration plot
+#' @param probabilities matrix containing the predicted probabilities
+#' @param outcome vector of true classes
+#' @param method name of method for plot title
+#' @param n_bins number of bins to divide samples in
+#' 
+#' 
+#' @return returns a calibrationplot
+#'
 make_calibtation_plot <- function(probabilities, outcome, method, n_bins = 10) {
   
   class_names = colnames(probabilities)
@@ -121,6 +139,12 @@ make_calibtation_plot <- function(probabilities, outcome, method, n_bins = 10) {
   return(plot)
 }
 
+#' Computes KL divergence-based convergence measure
+#' @param p Probability vector representing a probability distribution
+#' @param q_matrix Square matrix representing transition probabilities
+#' 
+#' @return Returns the KL divergence-based convergence measure
+#'
 kl_convergence <- function(p, q_matrix) {
   epsilon <- 1e-7
   p <- p / sum(p) # Normalize p to sum to 1
@@ -143,7 +167,15 @@ kl_convergence <- function(p, q_matrix) {
   return(total_divergence)
 }
 
-
+#' Fine-tunes a soft classifier using cross-validation and returns performance metrics
+#' @param x Covariate matrix of training sample
+#' @param y Vector of outcomes of training sample
+#' @param method List containing information about the tuning method
+#' @param n_folds Number of folds for cross-validation
+#' 
+#' @return List containing performance metrics and best tuning parameters
+#'
+#
 finetuning_soft_classifier <- function(x, y, method, n_folds=5){
   #library(method$library) # install and load package
   
