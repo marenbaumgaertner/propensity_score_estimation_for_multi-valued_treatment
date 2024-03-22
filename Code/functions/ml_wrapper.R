@@ -46,7 +46,7 @@ predict.logit_fit = function(logit_fit,x,y,xnew=NULL,weights=FALSE){
     colnames(fit) = logit_fit$classnames
   }
   
-  fit
+  return(fit)
 }
 
 
@@ -85,8 +85,7 @@ predict.nb_gaussian_fit = function(nb_gaussian_fit,x,y,xnew=NULL,weights=FALSE){
   }
   
   fit = predict(nb_gaussian_fit, newdata=xnew, type = "prob")
-  #list("prediction"=fit,  "weights"="No weighted representation available.")
-  fit
+  return(fit)
 }
 
 #' This function calculates the bernoulli Naive Bayes model based on the \code{\link{naivebayes}} package 
@@ -123,8 +122,7 @@ predict.nb_bernoulli_fit = function(nb_bernoulli_fit,x,y,xnew=NULL,weights=FALSE
   }
   
   fit = predict(nb_bernoulli_fit, newdata=xnew, type = "prob")
-  #list("prediction"=fit,  "weights"="No weighted representation available.")
-  fit
+  return(fit)
 }
 
 
@@ -177,20 +175,15 @@ predict.xgboost_fit = function(xgboost_fit,x,y,xnew=NULL,weights=FALSE){
   
   fit = predict(xgboost_fit, newdata=xnew, type = "prob") 
   if (length(unique(y))==2){
-  #if (length((unique(subset_y)))==2){
     fit = as_tibble(fit)
     fit[,2] = 1 - fit[,1]
     colnames(fit) = rev(sort(unique(y)))
-    #colnames(fit) = rev(sort(unique(subset_y)))
-    
   }else{
     fit = matrix(fit, nrow = nrow(xnew), ncol = length(unique(y)), byrow = TRUE)
     colnames(fit) = sort(unique(y))
     
   }
-
-  #list("prediction"=fit,  "weights"="No weighted representation available.")
-  fit
+  return(fit)
 }
 
 
@@ -231,10 +224,7 @@ predict.svm_fit <- function(svm_fit, x, y, xnew = NULL, weights = FALSE) {
   
   # Perform predictions using the trained SVM model
   fit <- predict(svm_fit, newdata = xnew, probability = TRUE) %>% attr("probabilities")
-  
-  # Return the predictions and weights (if any)
-  result <- list("prediction" = fit, "weights"="No weighted representation available.")
-  return(result)
+  return(fit)
 }
 
 
@@ -273,8 +263,8 @@ predict.lda_fit = function(lda_fit,x,y,xnew=NULL,weights=FALSE){
   }
   fit <- predict(lda_fit, xnew, type="prob")$posterior # @Maren: remove type and retry :)
   
-  #list("prediction"=fit,  "weights"="No weighted representation available.")
-  fit
+  return(fit)
+  
 }
 
 #' This function calculates the Quadratic Discriminant Analysis based on the \code{\link{MASS}} package 
@@ -313,8 +303,7 @@ predict.qda_fit = function(qda_fit,x,y,xnew=NULL,weights=FALSE){
   }
   
   fit <- predict(qda_fit, xnew, type="prob")$posterior
-  #list("prediction"=fit,  "weights"="No weighted representation available.")
-  fit
+  return(fit)
 }
 
 
@@ -356,8 +345,7 @@ predict.probability_forest_fit = function(probability_forest_fit, x,y,xnew=NULL,
   else w = NULL
   
   fit = predict(probability_forest_fit, newdata=xnew)$predictions
-  #list("prediction"=fit,  "weights"="No weighted representation available.")
-  fit
+  return(fit)
 }
 
 
@@ -411,7 +399,7 @@ predict.bagging_fit = function(bagging_fit,x,y,xnew=NULL,weights=FALSE){
   if (length(unique(y))==2){
     colnames(fit) = sort(unique(y))
   }
-  list("prediction"=fit,  "weights"="No weighted representation available.")
+  return(fit)
 }
 
 
@@ -455,7 +443,7 @@ predict.adaboost_fit = function(adaboost_fit, x,y,xnew=NULL,weights=FALSE){
   if (length(unique(y))==2){
     colnames(fit) = sort(unique(y))
   }
-  list("prediction"=fit,  "weights"="No weighted representation available.")
+  return(fit)
 }
 
 
@@ -497,50 +485,7 @@ predict.knn_fit = function(knn_fit, x,y,xnew=NULL,weights=FALSE){
   }
   xnew = as.data.frame(xnew)
   fit = predict(knn_fit, newdata = xnew, type='prob')
-  #list("prediction"=fit,  "weights"="No weighted representation available.")
-  fit
-}
-
-
-
-#' Calculates k-Nearest Neighbor model using the \code{\link{kknn}} package
-#'
-#' @param x Matrix of covariates
-#' @param y vector of outcomes
-#' @param args List of arguments passed to  \code{\link{kknn}}
-#' @import grf
-#'
-#' @return An object with S3 class "kknn"
-#'
-#' @keywords internal
-#'
-knn_radius_fit = function(x,y,args=list(distance=10)){
-  data <- data.frame(y = as.factor(y), x)
-  model = do.call(train.kknn ,c(list(formula = y ~ ., data = data), args))
-  model
-}
-#' Prediction based on k-Nearest Neighbor model.
-#' @param knn_radius_fit Output of \code{\link{kknn}} or \code{\link{knn_radius_fit}}
-#' @param x Covariate matrix of training sample
-#' @param y Vector of outcomes of training sample
-#' @param xnew Covariate matrix of test sample
-#' @param weights Always FALSE
-#'
-#' @return Returns list containing:
-#' \item{prediction}{vector of predictions for xnew}
-#' \item{weights}{Not supported for propensity score estimation}
-#'
-#' @keywords internal
-#'
-predict.knn_radius_fit = function(knn_radius_fit, x,y,xnew=NULL,weights=FALSE){
-  if (is.null(xnew)) xnew = x
-  if (weights==TRUE) {
-    warning("Weights are not supported for propensity score estimation.")
-  }
-  xnew = as.data.frame(xnew)
-  fit = predict(knn_radius_fit, newdata = xnew, type='prob')
-  #list("prediction"=fit,  "weights"="No weighted representation available.")
-  fit
+  return(fit)
 }
 
 
@@ -557,10 +502,8 @@ predict.knn_radius_fit = function(knn_radius_fit, x,y,xnew=NULL,weights=FALSE){
 #' @keywords internal
 #'
 mlpc_fit = function(x,y,args=list(size = c(5))){ #size=1
-  #if(is.null(size)) size=1
   data <- data.frame(y = as.factor(y), x)
   model = do.call(nnet ,c(list(x=x, y = class.ind(y), softmax = TRUE, lineout=TRUE), args))
-  #model = do.call(neuralnet, c(list(formula = y ~ ., data = data), args))
   model
 }
 #' Prediction based on Multilayer Perceptron fit.
@@ -583,51 +526,11 @@ predict.mlpc_fit = function(mlpc_fit, x,y,xnew=NULL,weights=FALSE){
   }
   
   fit = predict(mlpc_fit, newdata=xnew)
-  #list("prediction"=fit,  "weights"="No weighted representation available.")
-  fit
+  return(fit)
 }
 
 
-#' Calculates BART classification model using the \code{\link{bartMachine}} package
-#'
-#' @param x Matrix of covariates
-#' @param y vector of outcomes
-#' @param args List of arguments passed to  \code{\link{bartMachine}}
-#' @import bartMachine
-#'
-#' @return An object with S3 class "bartMachine"
-#'
-#' @keywords internal
-#'
-bart_fit = function(x,y,args=list()){
-  model = do.call(bartMachine, c(list(X=as.data.frame(x), y=as.factor(y)), args))
-  model
-}
-#' Prediction based on Probability Forest fit.
-#' @param bart_fit Output of \code{\link{bartMachine}} or \code{\link{bart_fit}}
-#' @param x Covariate matrix of training sample
-#' @param y Vector of outcomes of training sample
-#' @param xnew Covariate matrix of test sample
-#' @param weights Always FALSE
-#'
-#' @return Returns list containing:
-#' \item{prediction}{vector of predictions for xnew}
-#' \item{weights}{Not supported for propensity score estimation}
-#'
-#' @keywords internal
-#'
-predict.bart_fit = function(bart_fit, x,y,xnew, weights=FALSE){
-  if (is.null(xnew)) xnew = x
-  if (weights==TRUE) {
-    warning("Weights are not supported for propensity score estimation.")
-  }
-  
-  fit = predict(bart_fit, new_data=as.data.frame(xnew)) 
-  fit = as_tibble(fit)
-  fit[,2] = 1 - fit[,1]
-  colnames(fit) = rev(sort(unique(y)))
-  list("prediction"=fit,  "weights"="No weighted representation available.")
-}
+
 
 #' Calculates Probability Forest fit using the \code{\link{ranger}} package
 #'
@@ -672,13 +575,9 @@ predict.ranger_fit = function(ranger_fit, x,y,xnew=NULL,weights=FALSE){
   data$y <- as.factor(0)
   
   fit <- predict(ranger_fit, data = data)$predictions 
-
-  #list("prediction"=fit,  "weights"="No weighted representation available.")
-  fit
+  return(fit)
 }
 
-#model = ranger_fit(x = as.matrix(X_training), y = W_training)
-#preds = predict.ranger_fit(model, x = as.matrix(X_training), y = W_training, xnew = X_test)$prediction
 
 #' This function calculates the (multinomial) logistic regression based on the \code{\link{nnet}} package 
 #'
@@ -722,8 +621,7 @@ predict.logit_nnet_fit = function(multinom_fit, x,y,xnew=NULL,weights=FALSE){
     fit[,2] = 1-fit[,1]
     colnames(fit) = rev(sort(unique(y)))
   }
-  #list("prediction"=fit,  "weights"="No weighted representation available.")
-  fit
+  return(fit)
 }
 
 
@@ -897,7 +795,6 @@ predict.ovo_fit <- function(ovo_fit,x,y, xnew=NULL,weights=FALSE, method = "logi
   # Assign the results to the fit matrix
   fit <- t(simplify2array(opt_results))
   colnames(fit) <- unique(unlist(strsplit(names(ovo_fit), "_")))
-  #list("prediction"=fit,  "weights"="No weighted representation available.")
   return(fit)
 }
 
@@ -938,15 +835,13 @@ predict.ovo_fit_parallel <- function(ovo_fit, x, y, xnew = NULL, weights = FALSE
     class_j <- class_names[2]
     
     subset_y <- y[y %in% c(class_i, class_j)]
-    #print(paste0("classifier ", i))
-    
+
     # Predict probabilities using the i-th binary classifier
     fit_raw <- do.call(paste0("predict.", method,  "_fit"), 
                        list(ovo_fit[[i]], x=x, y=subset_y, xnew = xnew))
     
     if(is.list(fit_raw)) if(!is.data.frame(fit_raw)) fit_raw = fit_raw$prediction
     # Compute probabilities for second class if not provided by default
-    # @Maren: check how to add correct colnames
     fit_raw = fit_raw %>% as_tibble()
     if (ncol(fit_raw==1)){
       fit_raw[,2] <- 1 - fit_raw[,1]
@@ -1002,8 +897,6 @@ ovr_fit <- function(x, y, method = "logit") {
       class_i <- class_labels[i]      
       binarized_y <- ifelse(y == i, 1, 0)
   
-      
-      # @Maren: change to ml_methods[[ml]]
       ovr_classifiers[[paste(class_i)]] <- do.call(
         paste0(method, "_fit"),
         list(y = binarized_y, x = x)
@@ -1047,10 +940,8 @@ predict.ovr_fit <- function(ovr_fit,x,y, xnew=NULL,weights=FALSE, method = "logi
   for (i in 1:n_classifiers) {
     binarized_y <- ifelse(y == i, 1, 0)
     # Predict probabilities using the i-th binary classifier
-    # @Maren: change to ml_methods[[ml]]
     fit_raw <- do.call(paste0("predict.", method,  "_fit"), 
-                       list(ovr_fit[[i]], x=x, y=binarized_y, xnew = xnew))#$prediction
-    #print(colnames(fit_raw))
+                       list(ovr_fit[[i]], x=x, y=binarized_y, xnew = xnew))
     if(is.list(fit_raw)) if(!is.data.frame(fit_raw)) fit_raw = fit_raw$prediction
     if (ncol(fit_raw)==2){
       fit_raw = as_tibble(fit_raw) %>% select("1") 
@@ -1066,9 +957,7 @@ predict.ovr_fit <- function(ovr_fit,x,y, xnew=NULL,weights=FALSE, method = "logi
   # Normalize the probabilities to sum up to 1 for each sample
   fit <- fit / rowSums(fit)
   
-  
-  #list("prediction"=fit,  "weights"="No weighted representation available.")
-  fit
+  return(fit)
 }
 
 
