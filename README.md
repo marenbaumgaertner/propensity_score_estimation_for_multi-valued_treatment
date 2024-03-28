@@ -15,9 +15,14 @@ The Code part is organized as follows:
 
   1. Data
   2. Functions: ML wrapper  and evaluation function
-  3. Simulation study
+     
+  3. Simulation study:
+     + Step 1: fine-tuning of multi-class classifiers (fine_tune.Rmd + fine_tune_results.Rmd)
+     + Step 2: Run simulation study on (semi-)synthetic data (simulation_multiclass.R + simulation_binarized.R)
+     + Step 3: Evaluate the simulation study (simulation_results.Rmd)
+     + Step 4: Test model on observational data (observational_data.Rmd)
 
-The Notebooks part contains one notebook of the simulation study results on the (semi-)synthetic data and notebook of the results of the analysis of the observational data.
+The Notebooks part contains one notebook of the simulation study results on the (semi-)synthetic data and another one of the results of the analysis of the observational data.
 
 ## Contact
 For any inquiries or assistance regarding this repository or the research conducted, feel free to contact: 
